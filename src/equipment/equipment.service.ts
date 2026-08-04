@@ -1,10 +1,12 @@
 import { Injectable } from '@nestjs/common';
 
+export type EquipmentEnvironment = 'GYM' | 'HOME';
+
 export interface EquipmentItem {
   id: number;
   name: string;
   category: string;
-  environments: Array<'GYM' | 'HOME'>;
+  environments: EquipmentEnvironment[];
 }
 
 @Injectable()
@@ -44,5 +46,13 @@ export class EquipmentService {
 
   findAll(): EquipmentItem[] {
     return this.equipment;
+  }
+
+  findByEnvironment(
+    environment: EquipmentEnvironment,
+  ): EquipmentItem[] {
+    return this.equipment.filter((item) =>
+      item.environments.includes(environment),
+    );
   }
 }
