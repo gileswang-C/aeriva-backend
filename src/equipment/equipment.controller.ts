@@ -14,12 +14,12 @@ export class EquipmentController {
   constructor(private readonly equipmentService: EquipmentService) {}
 
   @Get()
-  findAll(@Query('environment') environment?: string) {
+  async findAll(@Query('environment') environment?: string) {
     if (!environment) {
       return {
         status: 'ok',
         filter: null,
-        data: this.equipmentService.findAll(),
+        data: await this.equipmentService.findAll(),
       };
     }
 
@@ -37,7 +37,7 @@ export class EquipmentController {
     return {
       status: 'ok',
       filter: normalizedEnvironment,
-      data: this.equipmentService.findByEnvironment(
+      data: await this.equipmentService.findByEnvironment(
         normalizedEnvironment as EquipmentEnvironment,
       ),
     };

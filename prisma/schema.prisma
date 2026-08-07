@@ -19,3 +19,12 @@ model UserEquipment {
   @@unique([userId, equipmentId, environment])
   @@index([userId])
 }
+model Equipment {
+  id           Int      @id
+  name         String   @unique
+  category     String
+  supportsGym  Boolean  @default(true)
+  supportsHome Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
