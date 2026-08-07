@@ -19,26 +19,31 @@ export class UserEquipmentController {
   ) {}
 
   @Get(':userId')
-  findByUserId(@Param('userId') userId: string) {
+  async findByUserId(@Param('userId') userId: string) {
+    const data =
+      await this.userEquipmentService.findByUserId(userId);
+
     return {
       status: 'ok',
-      data: this.userEquipmentService.findByUserId(userId),
+      data,
     };
   }
 
   @Put(':userId')
-  update(
+  async update(
     @Param('userId') userId: string,
     @Body() body: UpdateUserEquipmentBody,
   ) {
+    const data = await this.userEquipmentService.update(
+      userId,
+      body.homeEquipmentIds ?? [],
+      body.gymEquipmentIds ?? [],
+    );
+
     return {
       status: 'ok',
       message: 'User equipment updated',
-      data: this.userEquipmentService.update(
-        userId,
-        body.homeEquipmentIds ?? [],
-        body.gymEquipmentIds ?? [],
-      ),
+      data,
     };
   }
 }

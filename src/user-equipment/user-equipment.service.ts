@@ -1,51 +1,95 @@
 import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 
 export interface UserEquipmentProfile {
   userId: string;
   homeEquipmentIds: number[];
   gymEquipmentIds: number[];
-  updatedAt: string;
+  updatedAt: string | null;
 }
 
 @Injectable()
 export class UserEquipmentService {
-  private readonly profiles = new Map<string, UserEquipmentProfile>([
-    [
-      'demo-user',
-      {
-        userId: 'demo-user',
-        homeEquipmentIds: [1, 4, 5],
-        gymEquipmentIds: [1, 2, 3, 4, 5],
-        updatedAt: new Date().toISOString(),
-      },
-    ],
-  ]);
+  constructor(private readonly prisma: PrismaService) {}
 
-  findByUserId(userId: string): UserEquipmentProfile {
-    return (
-      this.profiles.get(userId) ?? {
+  async findByUserId(userId: string): Promise<UserEquipmentProfile> {
+    const records = await this.prisma.userEquipment.findMany({
+      where: {
         userId,
-        homeEquipmentIds: [],
-        gymEquipmentIds: [],
-        updatedAt: new Date().toISOString(),
-      }
-    );
+      },
+      orderBy: {
+        equipmentId: 'asc',
+      },
+    });
+
+    const homeEquipmentIds = [
+      ...new Set(
+        records
+          .filter((record) => record.environment === 'HOME')
+          .map((record) => record.equipmentId),
+      ),
+    ];
+
+    const gymEquipmentIds = [
+      ...new Set(
+        records
+          .filter((record) => record.environment === 'GYM')
+          .map((record) => record.equipmentId),
+      ),
+    ];
+
+    const latestUpdatedAt =
+      records.length > 0
+        ? new Date(
+            Math.max(
+              ...records.map((record) => record.updatedAt.getTime()),
+            ),
+          ).toISOString()
+        : null;
+
+    return {
+      userId,
+      homeEquipmentIds,
+      gymEquipmentIds,
+      updatedAt: latestUpdatedAt,
+    };
   }
 
-  update(
+  async update(
     userId: string,
     homeEquipmentIds: number[],
     gymEquipmentIds: number[],
-  ): UserEquipmentProfile {
-    const profile: UserEquipmentProfile = {
-      userId,
-      homeEquipmentIds: [...new Set(homeEquipmentIds)],
-      gymEquipmentIds: [...new Set(gymEquipmentIds)],
-      updatedAt: new Date().toISOString(),
-    };
+  ): Promise<UserEquipmentProfile> {
+    const uniqueHomeIds = [...new Set(homeEquipmentIds)];
+    const uniqueGymIds = [...new Set(gymEquipmentIds)];
 
-    this.profiles.set(userId, profile);
+    const data = [
+      ...uniqueHomeIds.map((equipmentId) => ({
+        userId,
+        equipmentId,
+        environment: 'HOME',
+      })),
+      ...uniqueGymIds.map((equipmentId) => ({
+        userId,
+        equipmentId,
+        environment: 'GYM',
+      })),
+    ];
 
-    return profile;
+    await this.prisma.$transaction(async (tx) => {
+      await tx.userEquipment.deleteMany({
+        where: {
+          userId,
+        },
+      });
+
+      if (data.length > 0) {
+        await tx.userEquipment.createMany({
+          data,
+        });
+      }
+    });
+
+    return this.findByUserId(userId);
   }
 }
