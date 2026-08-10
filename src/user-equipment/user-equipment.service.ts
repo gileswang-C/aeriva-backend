@@ -4,10 +4,18 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
+export interface UserEquipmentDetail {
+  id: number;
+  name: string;
+  category: string;
+}
+
 export interface UserEquipmentProfile {
   userId: string;
   homeEquipmentIds: number[];
   gymEquipmentIds: number[];
+  homeEquipment: UserEquipmentDetail[];
+  gymEquipment: UserEquipmentDetail[];
   updatedAt: string | null;
 }
 
@@ -22,26 +30,45 @@ export class UserEquipmentService {
       where: {
         userId,
       },
+      include: {
+        equipment: true,
+      },
       orderBy: {
         equipmentId: 'asc',
       },
     });
 
+    const homeRecords = records.filter(
+      (record) => record.environment === 'HOME',
+    );
+
+    const gymRecords = records.filter(
+      (record) => record.environment === 'GYM',
+    );
+
     const homeEquipmentIds = [
       ...new Set(
-        records
-          .filter((record) => record.environment === 'HOME')
-          .map((record) => record.equipmentId),
+        homeRecords.map((record) => record.equipmentId),
       ),
     ];
 
     const gymEquipmentIds = [
       ...new Set(
-        records
-          .filter((record) => record.environment === 'GYM')
-          .map((record) => record.equipmentId),
+        gymRecords.map((record) => record.equipmentId),
       ),
     ];
+
+    const homeEquipment = homeRecords.map((record) => ({
+      id: record.equipment.id,
+      name: record.equipment.name,
+      category: record.equipment.category,
+    }));
+
+    const gymEquipment = gymRecords.map((record) => ({
+      id: record.equipment.id,
+      name: record.equipment.name,
+      category: record.equipment.category,
+    }));
 
     const latestUpdatedAt =
       records.length > 0
@@ -58,6 +85,8 @@ export class UserEquipmentService {
       userId,
       homeEquipmentIds,
       gymEquipmentIds,
+      homeEquipment,
+      gymEquipment,
       updatedAt: latestUpdatedAt,
     };
   }
@@ -74,55 +103,55 @@ export class UserEquipmentService {
       ...new Set([...uniqueHomeIds, ...uniqueGymIds]),
     ];
 
-   if (allEquipmentIds.length > 0) {
-  const existingEquipment =
-    await this.prisma.equipment.findMany({
-      where: {
-        id: {
-          in: allEquipmentIds,
-        },
-      },
-      select: {
-        id: true,
-        supportsHome: true,
-        supportsGym: true,
-      },
-    });
+    if (allEquipmentIds.length > 0) {
+      const existingEquipment =
+        await this.prisma.equipment.findMany({
+          where: {
+            id: {
+              in: allEquipmentIds,
+            },
+          },
+          select: {
+            id: true,
+            supportsHome: true,
+            supportsGym: true,
+          },
+        });
 
-  const equipmentById = new Map(
-    existingEquipment.map((item) => [item.id, item]),
-  );
+      const equipmentById = new Map(
+        existingEquipment.map((item) => [item.id, item]),
+      );
 
-  const invalidIds = allEquipmentIds.filter(
-    (id) => !equipmentById.has(id),
-  );
+      const invalidIds = allEquipmentIds.filter(
+        (id) => !equipmentById.has(id),
+      );
 
-  if (invalidIds.length > 0) {
-    throw new BadRequestException(
-      `Equipment IDs not found: ${invalidIds.join(', ')}`,
-    );
-  }
+      if (invalidIds.length > 0) {
+        throw new BadRequestException(
+          `Equipment IDs not found: ${invalidIds.join(', ')}`,
+        );
+      }
 
-  const invalidHomeIds = uniqueHomeIds.filter(
-    (id) => !equipmentById.get(id)?.supportsHome,
-  );
+      const invalidHomeIds = uniqueHomeIds.filter(
+        (id) => !equipmentById.get(id)?.supportsHome,
+      );
 
-  if (invalidHomeIds.length > 0) {
-    throw new BadRequestException(
-      `Equipment IDs not supported for HOME: ${invalidHomeIds.join(', ')}`,
-    );
-  }
+      if (invalidHomeIds.length > 0) {
+        throw new BadRequestException(
+          `Equipment IDs not supported for HOME: ${invalidHomeIds.join(', ')}`,
+        );
+      }
 
-  const invalidGymIds = uniqueGymIds.filter(
-    (id) => !equipmentById.get(id)?.supportsGym,
-  );
+      const invalidGymIds = uniqueGymIds.filter(
+        (id) => !equipmentById.get(id)?.supportsGym,
+      );
 
-  if (invalidGymIds.length > 0) {
-    throw new BadRequestException(
-      `Equipment IDs not supported for GYM: ${invalidGymIds.join(', ')}`,
-    );
-  }
-}
+      if (invalidGymIds.length > 0) {
+        throw new BadRequestException(
+          `Equipment IDs not supported for GYM: ${invalidGymIds.join(', ')}`,
+        );
+      }
+    }
 
     const data = [
       ...uniqueHomeIds.map((equipmentId) => ({
