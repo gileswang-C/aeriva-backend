@@ -1,13 +1,20 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   Get,
-  Query,
+  Param,
+  ParseIntPipe,
+  Post,
 } from '@nestjs/common';
-import {
-  ExerciseEnvironment,
-} from '../exercises/exercises.service';
+import { ExerciseEnvironment } from '../exercises/exercises.service';
 import { TrainingPlansService } from './training-plans.service';
+
+interface GenerateTrainingPlanBody {
+  userId: string;
+  environment: string;
+  targetMuscle: string;
+}
 
 @Controller('training-plans')
 export class TrainingPlansController {
@@ -15,12 +22,16 @@ export class TrainingPlansController {
     private readonly trainingPlansService: TrainingPlansService,
   ) {}
 
-  @Get('generate')
+  @Post('generate')
   async generate(
-    @Query('userId') userId?: string,
-    @Query('environment') environment?: string,
-    @Query('targetMuscle') targetMuscle?: string,
+    @Body() body: GenerateTrainingPlanBody,
   ) {
+    const {
+      userId,
+      environment,
+      targetMuscle,
+    } = body;
+
     if (!userId) {
       throw new BadRequestException('userId is required');
     }
@@ -31,7 +42,8 @@ export class TrainingPlansController {
       );
     }
 
-    const normalizedEnvironment = environment?.toUpperCase();
+    const normalizedEnvironment =
+      environment?.toUpperCase();
 
     if (
       normalizedEnvironment !== 'HOME' &&
@@ -49,6 +61,16 @@ export class TrainingPlansController {
         normalizedEnvironment as ExerciseEnvironment,
         targetMuscle,
       ),
+    };
+  }
+
+  @Get(':planId')
+  async findById(
+    @Param('planId', ParseIntPipe) planId: number,
+  ) {
+    return {
+      status: 'ok',
+      data: await this.trainingPlansService.findById(planId),
     };
   }
 }

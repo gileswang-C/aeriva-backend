@@ -17,6 +17,7 @@ model UserEquipment {
   updatedAt   DateTime @updatedAt
 
   equipment Equipment @relation(fields: [equipmentId], references: [id])
+  
 
   @@unique([userId, equipmentId, environment])
   @@index([userId])
@@ -46,6 +47,37 @@ model Exercise {
   updatedAt    DateTime @updatedAt
 
   equipment Equipment? @relation(fields: [equipmentId], references: [id])
+  trainingPlanExercises TrainingPlanExercise[]
 
   @@index([equipmentId])
+}
+model TrainingPlan {
+  id           Int      @id @default(autoincrement())
+  userId       String
+  environment  String
+  targetMuscle String
+  status       String   @default("ACTIVE")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  exercises TrainingPlanExercise[]
+
+  @@index([userId])
+}
+
+model TrainingPlanExercise {
+  id          Int @id @default(autoincrement())
+  planId      Int
+  exerciseId  Int
+  order       Int
+  sets        Int
+  reps        Int
+  restSeconds Int
+
+  plan     TrainingPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  exercise Exercise     @relation(fields: [exerciseId], references: [id])
+
+  @@unique([planId, exerciseId])
+  @@index([planId])
+  @@index([exerciseId])
 }
