@@ -6,9 +6,10 @@ import { EquipmentModule } from './equipment/equipment.module';
 import { UserEquipmentModule } from './user-equipment/user-equipment.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ExercisesModule } from './exercises/exercises.module';
+import { TrainingPlansModule } from './training-plans/training-plans.module';
 
 @Module({
-  imports: [EquipmentModule, UserEquipmentModule, PrismaModule, ExercisesModule],
+  imports: [EquipmentModule, UserEquipmentModule, PrismaModule, ExercisesModule, TrainingPlansModule],
   controllers: [AppController, HealthController],
   providers: [AppService],
 })
