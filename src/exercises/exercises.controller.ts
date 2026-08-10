@@ -1,5 +1,13 @@
-import { Controller, Get } from '@nestjs/common';
-import { ExercisesService } from './exercises.service';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Query,
+} from '@nestjs/common';
+import {
+  ExerciseEnvironment,
+  ExercisesService,
+} from './exercises.service';
 
 @Controller('exercises')
 export class ExercisesController {
@@ -12,6 +20,37 @@ export class ExercisesController {
     return {
       status: 'ok',
       data: await this.exercisesService.findAll(),
+    };
+  }
+
+  @Get('available')
+  async findAvailable(
+    @Query('userId') userId?: string,
+    @Query('environment') environment?: string,
+  ) {
+    if (!userId) {
+      throw new BadRequestException('userId is required');
+    }
+
+    const normalizedEnvironment = environment?.toUpperCase();
+
+    if (
+      normalizedEnvironment !== 'HOME' &&
+      normalizedEnvironment !== 'GYM'
+    ) {
+      throw new BadRequestException(
+        'environment must be HOME or GYM',
+      );
+    }
+
+    return {
+      status: 'ok',
+      userId,
+      environment: normalizedEnvironment,
+      data: await this.exercisesService.findAvailableForUser(
+        userId,
+        normalizedEnvironment as ExerciseEnvironment,
+      ),
     };
   }
 }
