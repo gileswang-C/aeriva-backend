@@ -16,9 +16,13 @@ model UserEquipment {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  equipment Equipment @relation(fields: [equipmentId], references: [id])
+
   @@unique([userId, equipmentId, environment])
   @@index([userId])
+  @@index([equipmentId])
 }
+
 model Equipment {
   id           Int      @id
   name         String   @unique
@@ -27,4 +31,6 @@ model Equipment {
   supportsHome Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  userEquipments UserEquipment[]
 }

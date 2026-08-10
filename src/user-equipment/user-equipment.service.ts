@@ -1,4 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface UserEquipmentProfile {
@@ -12,7 +15,9 @@ export interface UserEquipmentProfile {
 export class UserEquipmentService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findByUserId(userId: string): Promise<UserEquipmentProfile> {
+  async findByUserId(
+    userId: string,
+  ): Promise<UserEquipmentProfile> {
     const records = await this.prisma.userEquipment.findMany({
       where: {
         userId,
@@ -42,7 +47,9 @@ export class UserEquipmentService {
       records.length > 0
         ? new Date(
             Math.max(
-              ...records.map((record) => record.updatedAt.getTime()),
+              ...records.map((record) =>
+                record.updatedAt.getTime(),
+              ),
             ),
           ).toISOString()
         : null;
@@ -62,6 +69,60 @@ export class UserEquipmentService {
   ): Promise<UserEquipmentProfile> {
     const uniqueHomeIds = [...new Set(homeEquipmentIds)];
     const uniqueGymIds = [...new Set(gymEquipmentIds)];
+
+    const allEquipmentIds = [
+      ...new Set([...uniqueHomeIds, ...uniqueGymIds]),
+    ];
+
+   if (allEquipmentIds.length > 0) {
+  const existingEquipment =
+    await this.prisma.equipment.findMany({
+      where: {
+        id: {
+          in: allEquipmentIds,
+        },
+      },
+      select: {
+        id: true,
+        supportsHome: true,
+        supportsGym: true,
+      },
+    });
+
+  const equipmentById = new Map(
+    existingEquipment.map((item) => [item.id, item]),
+  );
+
+  const invalidIds = allEquipmentIds.filter(
+    (id) => !equipmentById.has(id),
+  );
+
+  if (invalidIds.length > 0) {
+    throw new BadRequestException(
+      `Equipment IDs not found: ${invalidIds.join(', ')}`,
+    );
+  }
+
+  const invalidHomeIds = uniqueHomeIds.filter(
+    (id) => !equipmentById.get(id)?.supportsHome,
+  );
+
+  if (invalidHomeIds.length > 0) {
+    throw new BadRequestException(
+      `Equipment IDs not supported for HOME: ${invalidHomeIds.join(', ')}`,
+    );
+  }
+
+  const invalidGymIds = uniqueGymIds.filter(
+    (id) => !equipmentById.get(id)?.supportsGym,
+  );
+
+  if (invalidGymIds.length > 0) {
+    throw new BadRequestException(
+      `Equipment IDs not supported for GYM: ${invalidGymIds.join(', ')}`,
+    );
+  }
+}
 
     const data = [
       ...uniqueHomeIds.map((equipmentId) => ({
