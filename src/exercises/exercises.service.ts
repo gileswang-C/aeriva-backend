@@ -27,6 +27,7 @@ export class ExercisesService {
   async findAvailableForUser(
     userId: string,
     environment: ExerciseEnvironment,
+    targetMuscle?: string,
   ) {
     const userEquipment =
       await this.prisma.userEquipment.findMany({
@@ -45,15 +46,26 @@ export class ExercisesService {
 
     return this.prisma.exercise.findMany({
       where: {
-        OR: [
+        AND: [
           {
-            equipmentId: null,
+            OR: [
+              {
+                equipmentId: null,
+              },
+              {
+                equipmentId: {
+                  in: equipmentIds,
+                },
+              },
+            ],
           },
-          {
-            equipmentId: {
-              in: equipmentIds,
-            },
-          },
+          ...(targetMuscle
+            ? [
+                {
+                  targetMuscle,
+                },
+              ]
+            : []),
         ],
       },
       include: {

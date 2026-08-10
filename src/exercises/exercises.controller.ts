@@ -27,6 +27,7 @@ export class ExercisesController {
   async findAvailable(
     @Query('userId') userId?: string,
     @Query('environment') environment?: string,
+    @Query('targetMuscle') targetMuscle?: string,
   ) {
     if (!userId) {
       throw new BadRequestException('userId is required');
@@ -47,9 +48,11 @@ export class ExercisesController {
       status: 'ok',
       userId,
       environment: normalizedEnvironment,
+      targetMuscle: targetMuscle ?? null,
       data: await this.exercisesService.findAvailableForUser(
         userId,
         normalizedEnvironment as ExerciseEnvironment,
+        targetMuscle,
       ),
     };
   }
