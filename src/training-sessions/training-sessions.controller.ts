@@ -105,6 +105,18 @@ export class TrainingSessionsController {
     };
   }
 
+  @Get(':sessionId/analysis')
+  async analyze(
+    @Param('sessionId', ParseIntPipe) sessionId: number,
+  ) {
+    return {
+      status: 'ok',
+      data: await this.trainingSessionsService.analyze(
+        sessionId,
+      ),
+    };
+  }
+
   @Get(':sessionId')
   async findById(
     @Param('sessionId', ParseIntPipe) sessionId: number,

@@ -241,4 +241,102 @@ export class TrainingSessionsService {
       expectedSetCount,
     };
   }
+
+  async analyze(sessionId: number) {
+    const session =
+      await this.prisma.trainingSession.findUnique({
+        where: {
+          id: sessionId,
+        },
+        include: {
+          plan: {
+            include: {
+              exercises: {
+                include: {
+                  exercise: true,
+                },
+                orderBy: {
+                  order: 'asc',
+                },
+              },
+            },
+          },
+          sets: {
+            where: {
+              completed: true,
+            },
+            orderBy: {
+              setNumber: 'asc',
+            },
+          },
+        },
+      });
+
+    if (!session) {
+      throw new BadRequestException(
+        `Training session not found: ${sessionId}`,
+      );
+    }
+
+    const exerciseAnalysis =
+      session.plan.exercises.map((planExercise) => {
+        const setLogs = session.sets.filter(
+          (set) =>
+            set.planExerciseId === planExercise.id,
+        );
+
+        const expectedReps =
+          planExercise.sets * planExercise.reps;
+
+        const actualReps = setLogs.reduce(
+          (total, set) => total + (set.reps ?? 0),
+          0,
+        );
+
+        const completionRatePercent =
+          expectedReps > 0
+            ? Math.round(
+                (actualReps / expectedReps) * 100,
+              )
+            : 0;
+
+        let recommendation: string;
+
+        if (completionRatePercent >= 100) {
+          recommendation =
+            '目标完成良好，下次可维持当前强度，状态稳定时再考虑小幅增加负荷。';
+        } else if (completionRatePercent >= 90) {
+          recommendation =
+            '接近计划目标，下次建议先维持当前负荷和目标次数。';
+        } else {
+          recommendation =
+            '完成度低于计划目标，下次可考虑适当降低负荷或减少目标次数。';
+        }
+
+        return {
+          exerciseId: planExercise.exerciseId,
+          exerciseName: planExercise.exercise.name,
+          expectedSets: planExercise.sets,
+          completedSets: setLogs.length,
+          targetRepsPerSet: planExercise.reps,
+          actualRepsBySet: setLogs.map(
+            (set) => set.reps ?? 0,
+          ),
+          expectedTotalReps: expectedReps,
+          actualTotalReps: actualReps,
+          completionRatePercent,
+          recommendation,
+        };
+      });
+
+    return {
+      sessionId: session.id,
+      userId: session.userId,
+      planId: session.planId,
+      status: session.status,
+      environment: session.plan.environment,
+      targetMuscle: session.plan.targetMuscle,
+      exerciseAnalysis,
+    };
+  }
 }
