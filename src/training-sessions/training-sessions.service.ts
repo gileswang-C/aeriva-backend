@@ -300,17 +300,56 @@ export class TrainingSessionsService {
               )
             : 0;
 
+        const weightKgBySet = setLogs.map(
+          (set) => set.weightKg,
+        );
+
+        const recordedWeights = setLogs
+          .map((set) => set.weightKg)
+          .filter(
+            (weight): weight is number =>
+              weight !== null,
+          );
+
+        const currentWeightKg =
+          recordedWeights.length > 0
+            ? recordedWeights[
+                recordedWeights.length - 1
+              ]
+            : null;
+
+        let loadAction:
+          | 'MAINTAIN'
+          | 'REDUCE'
+          | 'NO_WEIGHT_DATA';
+
+        if (currentWeightKg === null) {
+          loadAction = 'NO_WEIGHT_DATA';
+        } else if (completionRatePercent >= 90) {
+          loadAction = 'MAINTAIN';
+        } else {
+          loadAction = 'REDUCE';
+        }
+
         let recommendation: string;
 
-        if (completionRatePercent >= 100) {
+        if (loadAction === 'NO_WEIGHT_DATA') {
+          if (completionRatePercent >= 100) {
+            recommendation =
+              '目标完成良好。当前没有重量数据，暂不进行负荷调整判断。';
+          } else if (completionRatePercent >= 90) {
+            recommendation =
+              '接近计划目标。当前没有重量数据，建议先维持训练目标。';
+          } else {
+            recommendation =
+              '完成度低于计划目标。当前没有重量数据，可考虑降低动作难度或目标次数。';
+          }
+        } else if (loadAction === 'MAINTAIN') {
           recommendation =
-            '目标完成良好，下次可维持当前强度，状态稳定时再考虑小幅增加负荷。';
-        } else if (completionRatePercent >= 90) {
-          recommendation =
-            '接近计划目标，下次建议先维持当前负荷和目标次数。';
+            `当前负荷 ${currentWeightKg}kg 基本匹配训练能力，下次建议维持该重量和目标次数。`;
         } else {
           recommendation =
-            '完成度低于计划目标，下次可考虑适当降低负荷或减少目标次数。';
+            `当前负荷 ${currentWeightKg}kg 下完成度偏低，下次可考虑适当降低重量或目标次数。`;
         }
 
         return {
@@ -322,9 +361,12 @@ export class TrainingSessionsService {
           actualRepsBySet: setLogs.map(
             (set) => set.reps ?? 0,
           ),
+          weightKgBySet,
+          currentWeightKg,
           expectedTotalReps: expectedReps,
           actualTotalReps: actualReps,
           completionRatePercent,
+          loadAction,
           recommendation,
         };
       });
