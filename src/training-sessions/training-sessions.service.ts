@@ -409,7 +409,7 @@ export class TrainingSessionsService {
         orderBy: {
           completedAt: 'desc',
         },
-        take: safeLimit,
+        take: Math.max(safeLimit, 2),
         include: {
           sets: {
             where: {
@@ -495,12 +495,123 @@ export class TrainingSessionsService {
       };
     });
 
+    const validHistory = history.filter(
+      (
+        item,
+      ): item is NonNullable<typeof item> =>
+        item !== null,
+    );
+
+    let trend:
+      | 'NOT_ENOUGH_DATA'
+      | 'IMPROVING'
+      | 'STABLE'
+      | 'DECLINING' =
+      'NOT_ENOUGH_DATA';
+
+    let trendReason =
+      '至少需要 2 次已完成训练才能判断趋势。';
+
+    if (validHistory.length >= 2) {
+      const latest = validHistory[0];
+      const previous = validHistory[1];
+
+      const completionRateChange =
+        latest.completionRatePercent -
+        previous.completionRatePercent;
+
+      const hasComparableWeight =
+        latest.currentWeightKg !== null &&
+        previous.currentWeightKg !== null;
+
+      if (hasComparableWeight) {
+        const latestWeight =
+          latest.currentWeightKg as number;
+
+        const previousWeight =
+          previous.currentWeightKg as number;
+
+        if (latestWeight > previousWeight) {
+          if (
+            latest.completionRatePercent >= 90
+          ) {
+            trend = 'IMPROVING';
+            trendReason =
+              `最近一次重量从 ${previousWeight}kg 提高到 ${latestWeight}kg，且完成率仍达到 ${latest.completionRatePercent}%，判断为进步。`;
+          } else if (
+            completionRateChange <= -5
+          ) {
+            trend = 'DECLINING';
+            trendReason =
+              `最近一次虽然提高了重量，但完成率下降到 ${latest.completionRatePercent}%，当前负荷可能偏高。`;
+          } else {
+            trend = 'STABLE';
+            trendReason =
+              '最近一次提高了重量，但完成率尚未稳定达到 90%，暂时判断为稳定并继续观察。';
+          }
+        } else if (
+          latestWeight < previousWeight
+        ) {
+          if (
+            completionRateChange <= -5
+          ) {
+            trend = 'DECLINING';
+            trendReason =
+              `最近一次重量从 ${previousWeight}kg 降到 ${latestWeight}kg，同时完成率下降，判断为表现下降。`;
+          } else {
+            trend = 'STABLE';
+            trendReason =
+              `最近一次重量从 ${previousWeight}kg 降到 ${latestWeight}kg，V1 暂不判断为进步，建议继续观察后续表现。`;
+          }
+        } else {
+          if (completionRateChange >= 5) {
+            trend = 'IMPROVING';
+            trendReason =
+              `重量保持 ${latestWeight}kg，完成率提高了 ${completionRateChange} 个百分点，判断为进步。`;
+          } else if (
+            completionRateChange <= -5
+          ) {
+            trend = 'DECLINING';
+            trendReason =
+              `重量保持 ${latestWeight}kg，完成率下降了 ${Math.abs(
+                completionRateChange,
+              )} 个百分点，判断为表现下降。`;
+          } else {
+            trend = 'STABLE';
+            trendReason =
+              `重量保持 ${latestWeight}kg，最近两次完成率变化较小，判断为稳定。`;
+          }
+        }
+      } else {
+        if (completionRateChange >= 5) {
+          trend = 'IMPROVING';
+          trendReason =
+            `重量数据不足，暂按完成率判断；最近一次完成率提高了 ${completionRateChange} 个百分点。`;
+        } else if (
+          completionRateChange <= -5
+        ) {
+          trend = 'DECLINING';
+          trendReason =
+            `重量数据不足，暂按完成率判断；最近一次完成率下降了 ${Math.abs(
+              completionRateChange,
+            )} 个百分点。`;
+        } else {
+          trend = 'STABLE';
+          trendReason =
+            '重量数据不足，最近两次完成率变化较小，暂时判断为稳定。';
+        }
+      }
+    }
+
     return {
       userId,
       exerciseId,
-      count: history.length,
-      history: history.filter(
-        (item) => item !== null,
+      count: validHistory.length,
+      trend,
+      trendReason,
+      history: validHistory.slice(
+        0,
+        safeLimit,
       ),
     };
   }
