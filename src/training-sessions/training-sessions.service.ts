@@ -409,7 +409,7 @@ export class TrainingSessionsService {
         orderBy: {
           completedAt: 'desc',
         },
-        take: Math.max(safeLimit, 2),
+        take: Math.max(safeLimit, 3),
         include: {
           sets: {
             where: {
@@ -603,12 +603,84 @@ export class TrainingSessionsService {
       }
     }
 
+    const recentCompletionRates =
+      validHistory
+        .slice(0, safeLimit)
+        .map(
+          (item) =>
+            item.completionRatePercent,
+        );
+
+    let consecutiveTargetHits = 0;
+
+    if (validHistory.length > 0) {
+      const latestWeight =
+        validHistory[0].currentWeightKg;
+
+      if (latestWeight !== null) {
+        for (const item of validHistory) {
+          if (
+            item.currentWeightKg === latestWeight &&
+            item.completionRatePercent >= 100
+          ) {
+            consecutiveTargetHits += 1;
+          } else {
+            break;
+          }
+        }
+      }
+    }
+
+    let progressionStatus:
+      | 'NOT_ENOUGH_DATA'
+      | 'READY_TO_PROGRESS'
+      | 'MAINTAIN'
+      | 'REVIEW_LOAD' =
+      'NOT_ENOUGH_DATA';
+
+    let progressionReason =
+      '至少需要 2 次已完成训练才能判断是否具备进阶条件。';
+
+    if (validHistory.length >= 2) {
+      const latest = validHistory[0];
+
+      if (latest.currentWeightKg === null) {
+        progressionStatus = 'MAINTAIN';
+        progressionReason =
+          '当前没有可比较的重量数据，暂不进行加重量判断。';
+      } else if (
+        consecutiveTargetHits >= 2
+      ) {
+        progressionStatus =
+          'READY_TO_PROGRESS';
+
+        progressionReason =
+          `最近连续 ${consecutiveTargetHits} 次在 ${latest.currentWeightKg}kg 下完成 100% 目标，可考虑小幅提高负荷。`;
+      } else if (
+        latest.completionRatePercent < 90
+      ) {
+        progressionStatus = 'REVIEW_LOAD';
+
+        progressionReason =
+          `最近一次在 ${latest.currentWeightKg}kg 下完成率为 ${latest.completionRatePercent}%，建议先检查当前负荷是否偏高。`;
+      } else {
+        progressionStatus = 'MAINTAIN';
+
+        progressionReason =
+          `最近一次在 ${latest.currentWeightKg}kg 下完成率为 ${latest.completionRatePercent}%，暂时维持当前负荷，等待更多稳定表现。`;
+      }
+    }
+
     return {
       userId,
       exerciseId,
       count: validHistory.length,
       trend,
       trendReason,
+      progressionStatus,
+      consecutiveTargetHits,
+      recentCompletionRates,
+      progressionReason,
       history: validHistory.slice(
         0,
         safeLimit,
