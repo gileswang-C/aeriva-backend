@@ -381,4 +381,127 @@ export class TrainingSessionsService {
       exerciseAnalysis,
     };
   }
+
+  async findExerciseHistory(
+    userId: string,
+    exerciseId: number,
+    limit = 5,
+  ) {
+    const safeLimit = Math.min(
+      Math.max(limit, 1),
+      20,
+    );
+
+    const sessions =
+      await this.prisma.trainingSession.findMany({
+        where: {
+          userId,
+          status: 'COMPLETED',
+          sets: {
+            some: {
+              completed: true,
+              planExercise: {
+                exerciseId,
+              },
+            },
+          },
+        },
+        orderBy: {
+          completedAt: 'desc',
+        },
+        take: safeLimit,
+        include: {
+          sets: {
+            where: {
+              completed: true,
+              planExercise: {
+                exerciseId,
+              },
+            },
+            orderBy: {
+              setNumber: 'asc',
+            },
+            include: {
+              planExercise: {
+                include: {
+                  exercise: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+    const history = sessions.map((session) => {
+      const firstSet = session.sets[0];
+
+      if (!firstSet) {
+        return null;
+      }
+
+      const planExercise = firstSet.planExercise;
+
+      const expectedTotalReps =
+        planExercise.sets * planExercise.reps;
+
+      const actualTotalReps = session.sets.reduce(
+        (total, set) => total + (set.reps ?? 0),
+        0,
+      );
+
+      const completionRatePercent =
+        expectedTotalReps > 0
+          ? Math.round(
+              (actualTotalReps /
+                expectedTotalReps) *
+                100,
+            )
+          : 0;
+
+      const weightKgBySet = session.sets.map(
+        (set) => set.weightKg,
+      );
+
+      const recordedWeights = weightKgBySet.filter(
+        (weight): weight is number =>
+          weight !== null,
+      );
+
+      const currentWeightKg =
+        recordedWeights.length > 0
+          ? recordedWeights[
+              recordedWeights.length - 1
+            ]
+          : null;
+
+      return {
+        sessionId: session.id,
+        completedAt: session.completedAt,
+        exerciseId:
+          planExercise.exerciseId,
+        exerciseName:
+          planExercise.exercise.name,
+        expectedSets: planExercise.sets,
+        completedSets: session.sets.length,
+        targetRepsPerSet: planExercise.reps,
+        actualRepsBySet: session.sets.map(
+          (set) => set.reps ?? 0,
+        ),
+        weightKgBySet,
+        currentWeightKg,
+        expectedTotalReps,
+        actualTotalReps,
+        completionRatePercent,
+      };
+    });
+
+    return {
+      userId,
+      exerciseId,
+      count: history.length,
+      history: history.filter(
+        (item) => item !== null,
+      ),
+    };
+  }
 }

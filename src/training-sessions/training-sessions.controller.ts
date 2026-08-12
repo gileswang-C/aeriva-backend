@@ -6,6 +6,7 @@ import {
   Param,
   ParseIntPipe,
   Post,
+  Query,
 } from '@nestjs/common';
 import { TrainingSessionsService } from './training-sessions.service';
 
@@ -102,6 +103,39 @@ export class TrainingSessionsController {
       data: await this.trainingSessionsService.complete(
         sessionId,
       ),
+    };
+  }
+
+  @Get('history/:userId/:exerciseId')
+  async findExerciseHistory(
+    @Param('userId') userId: string,
+    @Param('exerciseId', ParseIntPipe)
+    exerciseId: number,
+    @Query('limit') limit?: string,
+  ) {
+    let parsedLimit = 5;
+
+    if (limit !== undefined) {
+      parsedLimit = Number(limit);
+
+      if (
+        !Number.isInteger(parsedLimit) ||
+        parsedLimit < 1
+      ) {
+        throw new BadRequestException(
+          'limit must be a positive integer',
+        );
+      }
+    }
+
+    return {
+      status: 'ok',
+      data:
+        await this.trainingSessionsService.findExerciseHistory(
+          userId,
+          exerciseId,
+          parsedLimit,
+        ),
     };
   }
 
