@@ -671,6 +671,116 @@ export class TrainingSessionsService {
       }
     }
 
+    let nextTrainingRecommendation: {
+      nextLoadAction:
+        | 'NOT_ENOUGH_DATA'
+        | 'INCREASE'
+        | 'MAINTAIN'
+        | 'REVIEW_LOAD'
+        | 'NO_WEIGHT_DATA';
+      currentWeightKg: number | null;
+      suggestedWeightKg: number | null;
+      suggestedSets: number | null;
+      suggestedReps: number | null;
+      reason: string;
+    };
+
+    if (validHistory.length === 0) {
+      nextTrainingRecommendation = {
+        nextLoadAction: 'NOT_ENOUGH_DATA',
+        currentWeightKg: null,
+        suggestedWeightKg: null,
+        suggestedSets: null,
+        suggestedReps: null,
+        reason:
+          '当前没有已完成训练记录，暂时无法生成下一次训练建议。',
+      };
+    } else {
+      const latest = validHistory[0];
+
+      if (validHistory.length < 2) {
+        nextTrainingRecommendation = {
+          nextLoadAction: 'NOT_ENOUGH_DATA',
+          currentWeightKg:
+            latest.currentWeightKg,
+          suggestedWeightKg:
+            latest.currentWeightKg,
+          suggestedSets:
+            latest.expectedSets,
+          suggestedReps:
+            latest.targetRepsPerSet,
+          reason:
+            '目前只有 1 次训练记录，建议先保持当前训练方案并继续积累数据。',
+        };
+      } else if (
+        latest.currentWeightKg === null
+      ) {
+        nextTrainingRecommendation = {
+          nextLoadAction: 'NO_WEIGHT_DATA',
+          currentWeightKg: null,
+          suggestedWeightKg: null,
+          suggestedSets:
+            latest.expectedSets,
+          suggestedReps:
+            latest.targetRepsPerSet,
+          reason:
+            '当前动作没有重量数据，暂不生成公斤数调整建议。',
+        };
+      } else if (
+        progressionStatus ===
+        'READY_TO_PROGRESS'
+      ) {
+        const suggestedWeightKg =
+          Math.round(
+            (latest.currentWeightKg + 2.5) *
+              10,
+          ) / 10;
+
+        nextTrainingRecommendation = {
+          nextLoadAction: 'INCREASE',
+          currentWeightKg:
+            latest.currentWeightKg,
+          suggestedWeightKg,
+          suggestedSets:
+            latest.expectedSets,
+          suggestedReps:
+            latest.targetRepsPerSet,
+          reason:
+            `最近连续 ${consecutiveTargetHits} 次在 ${latest.currentWeightKg}kg 下完成全部目标，V1 建议下次小幅提高至 ${suggestedWeightKg}kg。`,
+        };
+      } else if (
+        progressionStatus === 'REVIEW_LOAD'
+      ) {
+        nextTrainingRecommendation = {
+          nextLoadAction: 'REVIEW_LOAD',
+          currentWeightKg:
+            latest.currentWeightKg,
+          suggestedWeightKg:
+            latest.currentWeightKg,
+          suggestedSets:
+            latest.expectedSets,
+          suggestedReps:
+            latest.targetRepsPerSet,
+          reason:
+            `最近一次在 ${latest.currentWeightKg}kg 下完成率为 ${latest.completionRatePercent}%，暂不加重，建议先检查当前负荷是否合适。`,
+        };
+      } else {
+        nextTrainingRecommendation = {
+          nextLoadAction: 'MAINTAIN',
+          currentWeightKg:
+            latest.currentWeightKg,
+          suggestedWeightKg:
+            latest.currentWeightKg,
+          suggestedSets:
+            latest.expectedSets,
+          suggestedReps:
+            latest.targetRepsPerSet,
+          reason:
+            `当前建议继续维持 ${latest.currentWeightKg}kg、${latest.expectedSets} 组 × ${latest.targetRepsPerSet} 次，等待更多稳定表现。`,
+        };
+      }
+    }
+
     return {
       userId,
       exerciseId,
@@ -681,6 +791,7 @@ export class TrainingSessionsService {
       consecutiveTargetHits,
       recentCompletionRates,
       progressionReason,
+      nextTrainingRecommendation,
       history: validHistory.slice(
         0,
         safeLimit,
