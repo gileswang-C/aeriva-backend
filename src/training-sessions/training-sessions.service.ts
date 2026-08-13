@@ -304,12 +304,10 @@ export class TrainingSessionsService {
           (set) => set.weightKg,
         );
 
-        const recordedWeights = setLogs
-          .map((set) => set.weightKg)
-          .filter(
-            (weight): weight is number =>
-              weight !== null,
-          );
+        const recordedWeights = weightKgBySet.filter(
+          (weight): weight is number =>
+            weight !== null,
+        );
 
         const currentWeightKg =
           recordedWeights.length > 0
@@ -318,12 +316,21 @@ export class TrainingSessionsService {
               ]
             : null;
 
+        const loadAdherence =
+          this.getLoadAdherence(
+            planExercise.targetWeightKg,
+            weightKgBySet,
+          );
+
         let loadAction:
+          | 'WAIT_FOR_COMPLETION'
           | 'MAINTAIN'
           | 'REDUCE'
           | 'NO_WEIGHT_DATA';
 
-        if (currentWeightKg === null) {
+        if (session.status !== 'COMPLETED') {
+          loadAction = 'WAIT_FOR_COMPLETION';
+        } else if (currentWeightKg === null) {
           loadAction = 'NO_WEIGHT_DATA';
         } else if (completionRatePercent >= 90) {
           loadAction = 'MAINTAIN';
@@ -333,7 +340,10 @@ export class TrainingSessionsService {
 
         let recommendation: string;
 
-        if (loadAction === 'NO_WEIGHT_DATA') {
+        if (loadAction === 'WAIT_FOR_COMPLETION') {
+          recommendation =
+            '训练尚未完成，当前仅展示执行进度与计划重量偏差，暂不进行下一次负荷调整判断。';
+        } else if (loadAction === 'NO_WEIGHT_DATA') {
           if (completionRatePercent >= 100) {
             recommendation =
               '目标完成良好。当前没有重量数据，暂不进行负荷调整判断。';
@@ -346,10 +356,10 @@ export class TrainingSessionsService {
           }
         } else if (loadAction === 'MAINTAIN') {
           recommendation =
-            `当前负荷 ${currentWeightKg}kg 基本匹配训练能力，下次建议维持该重量和目标次数。`;
+            `当前实际负荷 ${currentWeightKg}kg 基本匹配训练能力，下次建议结合计划执行情况继续观察。`;
         } else {
           recommendation =
-            `当前负荷 ${currentWeightKg}kg 下完成度偏低，下次可考虑适当降低重量或目标次数。`;
+            `当前实际负荷 ${currentWeightKg}kg 下完成度偏低，下次可考虑适当降低重量或目标次数。`;
         }
 
         return {
@@ -361,8 +371,19 @@ export class TrainingSessionsService {
           actualRepsBySet: setLogs.map(
             (set) => set.reps ?? 0,
           ),
+
+          targetWeightKg:
+            planExercise.targetWeightKg,
+
           weightKgBySet,
           currentWeightKg,
+
+          loadAdherenceStatus:
+            loadAdherence.status,
+
+          loadAdherenceReason:
+            loadAdherence.reason,
+
           expectedTotalReps: expectedReps,
           actualTotalReps: actualReps,
           completionRatePercent,
@@ -474,6 +495,12 @@ export class TrainingSessionsService {
             ]
           : null;
 
+      const loadAdherence =
+        this.getLoadAdherence(
+          planExercise.targetWeightKg,
+          weightKgBySet,
+        );
+
       return {
         sessionId: session.id,
         completedAt: session.completedAt,
@@ -487,8 +514,19 @@ export class TrainingSessionsService {
         actualRepsBySet: session.sets.map(
           (set) => set.reps ?? 0,
         ),
+
+        targetWeightKg:
+          planExercise.targetWeightKg,
+
         weightKgBySet,
         currentWeightKg,
+
+        loadAdherenceStatus:
+          loadAdherence.status,
+
+        loadAdherenceReason:
+          loadAdherence.reason,
+
         expectedTotalReps,
         actualTotalReps,
         completionRatePercent,
@@ -537,17 +575,17 @@ export class TrainingSessionsService {
           ) {
             trend = 'IMPROVING';
             trendReason =
-              `最近一次重量从 ${previousWeight}kg 提高到 ${latestWeight}kg，且完成率仍达到 ${latest.completionRatePercent}%，判断为进步。`;
+              `最近一次实际重量从 ${previousWeight}kg 提高到 ${latestWeight}kg，且完成率仍达到 ${latest.completionRatePercent}%，判断为进步。`;
           } else if (
             completionRateChange <= -5
           ) {
             trend = 'DECLINING';
             trendReason =
-              `最近一次虽然提高了重量，但完成率下降到 ${latest.completionRatePercent}%，当前负荷可能偏高。`;
+              `最近一次虽然提高了实际重量，但完成率下降到 ${latest.completionRatePercent}%，当前负荷可能偏高。`;
           } else {
             trend = 'STABLE';
             trendReason =
-              '最近一次提高了重量，但完成率尚未稳定达到 90%，暂时判断为稳定并继续观察。';
+              '最近一次提高了实际重量，但完成率尚未稳定达到 90%，暂时判断为稳定并继续观察。';
           }
         } else if (
           latestWeight < previousWeight
@@ -557,29 +595,29 @@ export class TrainingSessionsService {
           ) {
             trend = 'DECLINING';
             trendReason =
-              `最近一次重量从 ${previousWeight}kg 降到 ${latestWeight}kg，同时完成率下降，判断为表现下降。`;
+              `最近一次实际重量从 ${previousWeight}kg 降到 ${latestWeight}kg，同时完成率下降，判断为表现下降。`;
           } else {
             trend = 'STABLE';
             trendReason =
-              `最近一次重量从 ${previousWeight}kg 降到 ${latestWeight}kg，V1 暂不判断为进步，建议继续观察后续表现。`;
+              `最近一次实际重量从 ${previousWeight}kg 降到 ${latestWeight}kg，暂不判断为进步，建议结合计划重量继续观察。`;
           }
         } else {
           if (completionRateChange >= 5) {
             trend = 'IMPROVING';
             trendReason =
-              `重量保持 ${latestWeight}kg，完成率提高了 ${completionRateChange} 个百分点，判断为进步。`;
+              `实际重量保持 ${latestWeight}kg，完成率提高了 ${completionRateChange} 个百分点，判断为进步。`;
           } else if (
             completionRateChange <= -5
           ) {
             trend = 'DECLINING';
             trendReason =
-              `重量保持 ${latestWeight}kg，完成率下降了 ${Math.abs(
+              `实际重量保持 ${latestWeight}kg，完成率下降了 ${Math.abs(
                 completionRateChange,
               )} 个百分点，判断为表现下降。`;
           } else {
             trend = 'STABLE';
             trendReason =
-              `重量保持 ${latestWeight}kg，最近两次完成率变化较小，判断为稳定。`;
+              `实际重量保持 ${latestWeight}kg，最近两次完成率变化较小，判断为稳定。`;
           }
         }
       } else {
@@ -647,7 +685,7 @@ export class TrainingSessionsService {
       if (latest.currentWeightKg === null) {
         progressionStatus = 'MAINTAIN';
         progressionReason =
-          '当前没有可比较的重量数据，暂不进行加重量判断。';
+          '当前没有可比较的实际重量数据，暂不进行加重量判断。';
       } else if (
         consecutiveTargetHits >= 2
       ) {
@@ -655,19 +693,19 @@ export class TrainingSessionsService {
           'READY_TO_PROGRESS';
 
         progressionReason =
-          `最近连续 ${consecutiveTargetHits} 次在 ${latest.currentWeightKg}kg 下完成 100% 目标，可考虑小幅提高负荷。`;
+          `最近连续 ${consecutiveTargetHits} 次在实际 ${latest.currentWeightKg}kg 下完成 100% 目标，可考虑小幅提高负荷。`;
       } else if (
         latest.completionRatePercent < 90
       ) {
         progressionStatus = 'REVIEW_LOAD';
 
         progressionReason =
-          `最近一次在 ${latest.currentWeightKg}kg 下完成率为 ${latest.completionRatePercent}%，建议先检查当前负荷是否偏高。`;
+          `最近一次在实际 ${latest.currentWeightKg}kg 下完成率为 ${latest.completionRatePercent}%，建议先检查当前负荷是否偏高。`;
       } else {
         progressionStatus = 'MAINTAIN';
 
         progressionReason =
-          `最近一次在 ${latest.currentWeightKg}kg 下完成率为 ${latest.completionRatePercent}%，暂时维持当前负荷，等待更多稳定表现。`;
+          `最近一次在实际 ${latest.currentWeightKg}kg 下完成率为 ${latest.completionRatePercent}%，暂时维持当前负荷，等待更多稳定表现。`;
       }
     }
 
@@ -724,7 +762,7 @@ export class TrainingSessionsService {
           suggestedReps:
             latest.targetRepsPerSet,
           reason:
-            '当前动作没有重量数据，暂不生成公斤数调整建议。',
+            '当前动作没有实际重量数据，暂不生成公斤数调整建议。',
         };
       } else if (
         progressionStatus ===
@@ -746,7 +784,7 @@ export class TrainingSessionsService {
           suggestedReps:
             latest.targetRepsPerSet,
           reason:
-            `最近连续 ${consecutiveTargetHits} 次在 ${latest.currentWeightKg}kg 下完成全部目标，V1 建议下次小幅提高至 ${suggestedWeightKg}kg。`,
+            `最近连续 ${consecutiveTargetHits} 次在实际 ${latest.currentWeightKg}kg 下完成全部目标，V1 建议下次小幅提高至 ${suggestedWeightKg}kg。`,
         };
       } else if (
         progressionStatus === 'REVIEW_LOAD'
@@ -762,7 +800,7 @@ export class TrainingSessionsService {
           suggestedReps:
             latest.targetRepsPerSet,
           reason:
-            `最近一次在 ${latest.currentWeightKg}kg 下完成率为 ${latest.completionRatePercent}%，暂不加重，建议先检查当前负荷是否合适。`,
+            `最近一次在实际 ${latest.currentWeightKg}kg 下完成率为 ${latest.completionRatePercent}%，暂不加重，建议先检查当前负荷是否合适。`,
         };
       } else {
         nextTrainingRecommendation = {
@@ -776,7 +814,7 @@ export class TrainingSessionsService {
           suggestedReps:
             latest.targetRepsPerSet,
           reason:
-            `当前建议继续维持 ${latest.currentWeightKg}kg、${latest.expectedSets} 组 × ${latest.targetRepsPerSet} 次，等待更多稳定表现。`,
+            `当前建议继续维持实际 ${latest.currentWeightKg}kg、${latest.expectedSets} 组 × ${latest.targetRepsPerSet} 次，等待更多稳定表现。`,
         };
       }
     }
@@ -796,6 +834,90 @@ export class TrainingSessionsService {
         0,
         safeLimit,
       ),
+    };
+  }
+
+  private getLoadAdherence(
+    targetWeightKg: number | null,
+    actualWeightKgBySet: Array<number | null>,
+  ): {
+    status:
+      | 'NO_TARGET'
+      | 'NO_ACTUAL_WEIGHT'
+      | 'ON_TARGET'
+      | 'BELOW_TARGET'
+      | 'ABOVE_TARGET'
+      | 'MIXED';
+    reason: string;
+  } {
+    if (targetWeightKg === null) {
+      return {
+        status: 'NO_TARGET',
+        reason:
+          '当前训练计划没有设置目标重量。',
+      };
+    }
+
+    const recordedWeights =
+      actualWeightKgBySet.filter(
+        (weight): weight is number =>
+          weight !== null,
+      );
+
+    if (recordedWeights.length === 0) {
+      return {
+        status: 'NO_ACTUAL_WEIGHT',
+        reason:
+          `计划目标为 ${targetWeightKg}kg，但本次没有记录实际重量。`,
+      };
+    }
+
+    const tolerance = 0.001;
+
+    const hasBelow = recordedWeights.some(
+      (weight) =>
+        weight < targetWeightKg - tolerance,
+    );
+
+    const hasAbove = recordedWeights.some(
+      (weight) =>
+        weight > targetWeightKg + tolerance,
+    );
+
+    const allOnTarget = recordedWeights.every(
+      (weight) =>
+        Math.abs(weight - targetWeightKg) <=
+        tolerance,
+    );
+
+    if (allOnTarget) {
+      return {
+        status: 'ON_TARGET',
+        reason:
+          `计划目标为 ${targetWeightKg}kg，本次所有已记录组均按目标重量完成。`,
+      };
+    }
+
+    if (hasBelow && hasAbove) {
+      return {
+        status: 'MIXED',
+        reason:
+          `计划目标为 ${targetWeightKg}kg，本次实际重量既有低于目标也有高于目标的组。`,
+      };
+    }
+
+    if (hasBelow) {
+      return {
+        status: 'BELOW_TARGET',
+        reason:
+          `计划目标为 ${targetWeightKg}kg，本次至少一组实际重量低于计划目标。`,
+      };
+    }
+
+    return {
+      status: 'ABOVE_TARGET',
+      reason:
+        `计划目标为 ${targetWeightKg}kg，本次至少一组实际重量高于计划目标。`,
     };
   }
 }
