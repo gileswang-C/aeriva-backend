@@ -2,114 +2,122 @@ import {
   BadRequestException,
   Injectable,
 } from '@nestjs/common';
-import {
-  ExerciseEnvironment,
-  ExercisesService,
-} from '../exercises/exercises.service';
+import { ExercisesService } from '../exercises/exercises.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class TrainingPlansService {
   constructor(
-    private readonly exercisesService: ExercisesService,
     private readonly prisma: PrismaService,
+    private readonly exercisesService: ExercisesService,
   ) {}
 
   async generate(
     userId: string,
-    environment: ExerciseEnvironment,
+    environment: string,
     targetMuscle: string,
   ) {
+    if (
+      environment !== 'HOME' &&
+      environment !== 'GYM'
+    ) {
+      throw new BadRequestException(
+        'environment must be HOME or GYM',
+      );
+    }
+
+    const validatedEnvironment =
+      environment as Parameters<
+        ExercisesService['findAvailableForUser']
+      >[1];
+
     const availableExercises =
       await this.exercisesService.findAvailableForUser(
         userId,
-        environment,
+        validatedEnvironment,
         targetMuscle,
       );
 
     if (availableExercises.length === 0) {
       throw new BadRequestException(
-        'No available exercises found for this user, environment, and target muscle',
+        'No available exercises found for this user and environment',
       );
     }
 
-    const exercises = availableExercises.map(
-      (exercise, index) => ({
-        exerciseId: exercise.id,
-        name: exercise.name,
-        targetMuscle: exercise.targetMuscle,
-        difficulty: exercise.difficulty,
-        equipment: exercise.equipment,
-        order: index + 1,
-        sets: 3,
-        reps: 10,
-        restSeconds: 60,
-      }),
+    const exercisePlans = await Promise.all(
+      availableExercises.map(
+        async (exercise, index) => {
+          const targetWeightKg =
+            await this.getSuggestedWeight(
+              userId,
+              exercise.id,
+            );
+
+          return {
+            exerciseId: exercise.id,
+            order: index + 1,
+            sets: 3,
+            reps: 10,
+            restSeconds: 60,
+            targetWeightKg,
+          };
+        },
+      ),
     );
 
-    const planId = await this.prisma.$transaction(
+    const plan = await this.prisma.$transaction(
       async (tx) => {
-        const plan = await tx.trainingPlan.create({
-          data: {
-            userId,
-            environment,
-            targetMuscle,
-            status: 'ACTIVE',
-          },
-        });
+        const createdPlan =
+          await tx.trainingPlan.create({
+            data: {
+              userId,
+              environment,
+              targetMuscle,
+              status: 'ACTIVE',
+            },
+          });
 
-        await tx.trainingPlanExercise.createMany({
-          data: exercises.map((exercise) => ({
-            planId: plan.id,
-            exerciseId: exercise.exerciseId,
-            order: exercise.order,
-            sets: exercise.sets,
-            reps: exercise.reps,
-            restSeconds: exercise.restSeconds,
-          })),
-        });
+        for (const exercisePlan of exercisePlans) {
+          await tx.trainingPlanExercise.create({
+            data: {
+              planId: createdPlan.id,
+              exerciseId:
+                exercisePlan.exerciseId,
+              order: exercisePlan.order,
+              sets: exercisePlan.sets,
+              reps: exercisePlan.reps,
+              restSeconds:
+                exercisePlan.restSeconds,
+              targetWeightKg:
+                exercisePlan.targetWeightKg,
+            },
+          });
+        }
 
-        return plan.id;
+        return createdPlan;
       },
     );
 
-    return {
-      planId,
-      userId,
-      environment,
-      targetMuscle,
-      status: 'ACTIVE',
-      exerciseCount: exercises.length,
-      exercises,
-    };
+    return this.findById(plan.id);
   }
 
   async findById(planId: number) {
-    const plan = await this.prisma.trainingPlan.findUnique({
-      where: {
-        id: planId,
-      },
-      include: {
-        exercises: {
-          include: {
-            exercise: {
-              include: {
-                equipment: {
-                  select: {
-                    id: true,
-                    name: true,
-                    category: true,
-                  },
-                },
-              },
+    const plan =
+      await this.prisma.trainingPlan.findUnique({
+        where: {
+          id: planId,
+        },
+        include: {
+          exercises: {
+            include: {
+              exercise: true,
+            },
+            orderBy: {
+              order: 'asc',
             },
           },
-          orderBy: {
-            order: 'asc',
-          },
         },
-      },
-    });
+      });
 
     if (!plan) {
       throw new BadRequestException(
@@ -124,19 +132,152 @@ export class TrainingPlansService {
       targetMuscle: plan.targetMuscle,
       status: plan.status,
       createdAt: plan.createdAt,
-      updatedAt: plan.updatedAt,
-      exerciseCount: plan.exercises.length,
-      exercises: plan.exercises.map((item) => ({
-        exerciseId: item.exercise.id,
-        name: item.exercise.name,
-        targetMuscle: item.exercise.targetMuscle,
-        difficulty: item.exercise.difficulty,
-        equipment: item.exercise.equipment,
-        order: item.order,
-        sets: item.sets,
-        reps: item.reps,
-        restSeconds: item.restSeconds,
-      })),
+      exercises: plan.exercises.map(
+        (planExercise) => ({
+          planExerciseId:
+            planExercise.id,
+          exerciseId:
+            planExercise.exerciseId,
+          exerciseName:
+            planExercise.exercise.name,
+          order: planExercise.order,
+          sets: planExercise.sets,
+          reps: planExercise.reps,
+          restSeconds:
+            planExercise.restSeconds,
+          targetWeightKg:
+            planExercise.targetWeightKg,
+        }),
+      ),
     };
+  }
+
+  private async getSuggestedWeight(
+    userId: string,
+    exerciseId: number,
+  ): Promise<number | null> {
+    const sessions =
+      await this.prisma.trainingSession.findMany({
+        where: {
+          userId,
+          status: 'COMPLETED',
+          sets: {
+            some: {
+              completed: true,
+              planExercise: {
+                exerciseId,
+              },
+            },
+          },
+        },
+        orderBy: {
+          completedAt: 'desc',
+        },
+        take: 2,
+        include: {
+          sets: {
+            where: {
+              completed: true,
+              planExercise: {
+                exerciseId,
+              },
+            },
+            orderBy: {
+              setNumber: 'asc',
+            },
+            include: {
+              planExercise: true,
+            },
+          },
+        },
+      });
+
+    if (sessions.length === 0) {
+      return null;
+    }
+
+    const getSessionPerformance = (
+      session: (typeof sessions)[number],
+    ) => {
+      const firstSet = session.sets[0];
+
+      if (!firstSet) {
+        return null;
+      }
+
+      const planExercise =
+        firstSet.planExercise;
+
+      const expectedTotalReps =
+        planExercise.sets *
+        planExercise.reps;
+
+      const actualTotalReps =
+        session.sets.reduce(
+          (total, set) =>
+            total + (set.reps ?? 0),
+          0,
+        );
+
+      const completionRatePercent =
+        expectedTotalReps > 0
+          ? Math.round(
+              (actualTotalReps /
+                expectedTotalReps) *
+                100,
+            )
+          : 0;
+
+      const weights = session.sets
+        .map((set) => set.weightKg)
+        .filter(
+          (weight): weight is number =>
+            weight !== null,
+        );
+
+      const currentWeightKg =
+        weights.length > 0
+          ? weights[weights.length - 1]
+          : null;
+
+      return {
+        currentWeightKg,
+        completionRatePercent,
+      };
+    };
+
+    const latest =
+      getSessionPerformance(sessions[0]);
+
+    if (
+      !latest ||
+      latest.currentWeightKg === null
+    ) {
+      return null;
+    }
+
+    if (sessions.length < 2) {
+      return latest.currentWeightKg;
+    }
+
+    const previous =
+      getSessionPerformance(sessions[1]);
+
+    if (
+      previous &&
+      previous.currentWeightKg ===
+        latest.currentWeightKg &&
+      previous.completionRatePercent >= 100 &&
+      latest.completionRatePercent >= 100
+    ) {
+      return (
+        Math.round(
+          (latest.currentWeightKg + 2.5) *
+            10,
+        ) / 10
+      );
+    }
+
+    return latest.currentWeightKg;
   }
 }

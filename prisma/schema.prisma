@@ -67,13 +67,14 @@ model TrainingPlan {
 }
 
 model TrainingPlanExercise {
-  id          Int @id @default(autoincrement())
-  planId      Int
-  exerciseId  Int
-  order       Int
-  sets        Int
-  reps        Int
-  restSeconds Int
+  id             Int     @id @default(autoincrement())
+  planId         Int
+  exerciseId     Int
+  order          Int
+  sets           Int
+  reps           Int
+  restSeconds    Int
+  targetWeightKg Float?
 
   plan     TrainingPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
   exercise Exercise     @relation(fields: [exerciseId], references: [id])
