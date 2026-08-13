@@ -27,13 +27,31 @@ export class TrainingSessionsService {
       );
     }
 
-    const session = await this.prisma.trainingSession.create({
-      data: {
-        userId,
-        planId,
-        status: 'IN_PROGRESS',
-      },
-    });
+    const activeSession =
+      await this.prisma.trainingSession.findFirst({
+        where: {
+          userId,
+          status: 'IN_PROGRESS',
+        },
+        orderBy: {
+          startedAt: 'desc',
+        },
+      });
+
+    if (activeSession) {
+      throw new BadRequestException(
+        `User already has an active training session: ${activeSession.id}`,
+      );
+    }
+
+    const session =
+      await this.prisma.trainingSession.create({
+        data: {
+          userId,
+          planId,
+          status: 'IN_PROGRESS',
+        },
+      });
 
     return {
       sessionId: session.id,
