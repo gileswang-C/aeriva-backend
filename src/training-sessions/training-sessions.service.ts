@@ -242,6 +242,54 @@ export class TrainingSessionsService {
     };
   }
 
+  async cancel(sessionId: number) {
+    const session =
+      await this.prisma.trainingSession.findUnique({
+        where: {
+          id: sessionId,
+        },
+        include: {
+          sets: {
+            where: {
+              completed: true,
+            },
+          },
+        },
+      });
+
+    if (!session) {
+      throw new BadRequestException(
+        `Training session not found: ${sessionId}`,
+      );
+    }
+
+    if (session.status !== 'IN_PROGRESS') {
+      throw new BadRequestException(
+        'Only an in-progress training session can be cancelled',
+      );
+    }
+
+    const cancelledSession =
+      await this.prisma.trainingSession.update({
+        where: {
+          id: sessionId,
+        },
+        data: {
+          status: 'CANCELLED',
+        },
+      });
+
+    return {
+      sessionId: cancelledSession.id,
+      userId: cancelledSession.userId,
+      planId: cancelledSession.planId,
+      status: cancelledSession.status,
+      startedAt: cancelledSession.startedAt,
+      completedAt: cancelledSession.completedAt,
+      recordedSetCount: session.sets.length,
+    };
+  }
+
   async analyze(sessionId: number) {
     const session =
       await this.prisma.trainingSession.findUnique({
@@ -324,11 +372,14 @@ export class TrainingSessionsService {
 
         let loadAction:
           | 'WAIT_FOR_COMPLETION'
+          | 'SESSION_CANCELLED'
           | 'MAINTAIN'
           | 'REDUCE'
           | 'NO_WEIGHT_DATA';
 
-        if (session.status !== 'COMPLETED') {
+        if (session.status === 'CANCELLED') {
+          loadAction = 'SESSION_CANCELLED';
+        } else if (session.status !== 'COMPLETED') {
           loadAction = 'WAIT_FOR_COMPLETION';
         } else if (currentWeightKg === null) {
           loadAction = 'NO_WEIGHT_DATA';
@@ -340,10 +391,17 @@ export class TrainingSessionsService {
 
         let recommendation: string;
 
-        if (loadAction === 'WAIT_FOR_COMPLETION') {
+        if (loadAction === 'SESSION_CANCELLED') {
+          recommendation =
+            '本次训练已取消，保留已记录数据，但不使用本次未完成训练生成下一次负荷调整结论。';
+        } else if (
+          loadAction === 'WAIT_FOR_COMPLETION'
+        ) {
           recommendation =
             '训练尚未完成，当前仅展示执行进度与计划重量偏差，暂不进行下一次负荷调整判断。';
-        } else if (loadAction === 'NO_WEIGHT_DATA') {
+        } else if (
+          loadAction === 'NO_WEIGHT_DATA'
+        ) {
           if (completionRatePercent >= 100) {
             recommendation =
               '目标完成良好。当前没有重量数据，暂不进行负荷调整判断。';

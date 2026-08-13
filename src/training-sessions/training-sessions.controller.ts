@@ -38,11 +38,15 @@ export class TrainingSessionsController {
     } = body;
 
     if (!userId) {
-      throw new BadRequestException('userId is required');
+      throw new BadRequestException(
+        'userId is required',
+      );
     }
 
     if (!planId) {
-      throw new BadRequestException('planId is required');
+      throw new BadRequestException(
+        'planId is required',
+      );
     }
 
     return {
@@ -56,7 +60,8 @@ export class TrainingSessionsController {
 
   @Post(':sessionId/sets')
   async logSet(
-    @Param('sessionId', ParseIntPipe) sessionId: number,
+    @Param('sessionId', ParseIntPipe)
+    sessionId: number,
     @Body() body: LogTrainingSetBody,
   ) {
     const {
@@ -78,31 +83,53 @@ export class TrainingSessionsController {
       );
     }
 
-    if (reps === undefined || reps === null) {
-      throw new BadRequestException('reps is required');
+    if (
+      reps === undefined ||
+      reps === null
+    ) {
+      throw new BadRequestException(
+        'reps is required',
+      );
     }
 
     return {
       status: 'ok',
-      data: await this.trainingSessionsService.logSet(
-        sessionId,
-        exerciseId,
-        setNumber,
-        reps,
-        weightKg,
-      ),
+      data:
+        await this.trainingSessionsService.logSet(
+          sessionId,
+          exerciseId,
+          setNumber,
+          reps,
+          weightKg,
+        ),
     };
   }
 
   @Post(':sessionId/complete')
   async complete(
-    @Param('sessionId', ParseIntPipe) sessionId: number,
+    @Param('sessionId', ParseIntPipe)
+    sessionId: number,
   ) {
     return {
       status: 'ok',
-      data: await this.trainingSessionsService.complete(
-        sessionId,
-      ),
+      data:
+        await this.trainingSessionsService.complete(
+          sessionId,
+        ),
+    };
+  }
+
+  @Post(':sessionId/cancel')
+  async cancel(
+    @Param('sessionId', ParseIntPipe)
+    sessionId: number,
+  ) {
+    return {
+      status: 'ok',
+      data:
+        await this.trainingSessionsService.cancel(
+          sessionId,
+        ),
     };
   }
 
@@ -141,25 +168,29 @@ export class TrainingSessionsController {
 
   @Get(':sessionId/analysis')
   async analyze(
-    @Param('sessionId', ParseIntPipe) sessionId: number,
+    @Param('sessionId', ParseIntPipe)
+    sessionId: number,
   ) {
     return {
       status: 'ok',
-      data: await this.trainingSessionsService.analyze(
-        sessionId,
-      ),
+      data:
+        await this.trainingSessionsService.analyze(
+          sessionId,
+        ),
     };
   }
 
   @Get(':sessionId')
   async findById(
-    @Param('sessionId', ParseIntPipe) sessionId: number,
+    @Param('sessionId', ParseIntPipe)
+    sessionId: number,
   ) {
     return {
       status: 'ok',
-      data: await this.trainingSessionsService.findById(
-        sessionId,
-      ),
+      data:
+        await this.trainingSessionsService.findById(
+          sessionId,
+        ),
     };
   }
 }
