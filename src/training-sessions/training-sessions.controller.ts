@@ -71,6 +71,36 @@ export class TrainingSessionsController {
     };
   }
 
+  @Get('user/:userId')
+  async findUserHistory(
+    @Param('userId') userId: string,
+    @Query('limit') limit?: string,
+  ) {
+    let parsedLimit = 20;
+
+    if (limit !== undefined) {
+      parsedLimit = Number(limit);
+
+      if (
+        !Number.isInteger(parsedLimit) ||
+        parsedLimit < 1
+      ) {
+        throw new BadRequestException(
+          'limit must be a positive integer',
+        );
+      }
+    }
+
+    return {
+      status: 'ok',
+      data:
+        await this.trainingSessionsService.findUserHistory(
+          userId,
+          parsedLimit,
+        ),
+    };
+  }
+
   @Post(':sessionId/sets')
   async logSet(
     @Param('sessionId', ParseIntPipe)

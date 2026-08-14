@@ -540,6 +540,116 @@ export class TrainingSessionsService {
     };
   }
 
+  async findUserHistory(
+    userId: string,
+    limit = 20,
+  ) {
+    const safeLimit = Math.min(
+      Math.max(limit, 1),
+      100,
+    );
+
+    const sessions =
+      await this.prisma.trainingSession.findMany({
+        where: {
+          userId,
+          status: 'COMPLETED',
+        },
+        orderBy: {
+          completedAt: 'desc',
+        },
+        take: safeLimit,
+        include: {
+          plan: {
+            include: {
+              exercises: {
+                include: {
+                  exercise: true,
+                },
+                orderBy: {
+                  order: 'asc',
+                },
+              },
+            },
+          },
+          sets: {
+            where: {
+              completed: true,
+            },
+          },
+        },
+      });
+
+    const history = sessions.map((session) => {
+      const expectedSetCount =
+        session.plan.exercises.reduce(
+          (total, exercise) =>
+            total + exercise.sets,
+          0,
+        );
+
+      const completedSetCount =
+        session.sets.length;
+
+      const actualTotalReps =
+        session.sets.reduce(
+          (total, set) =>
+            total + (set.reps ?? 0),
+          0,
+        );
+
+      const durationMinutes =
+        session.completedAt
+          ? Math.max(
+              0,
+              Math.round(
+                (session.completedAt.getTime() -
+                  session.startedAt.getTime()) /
+                  60000,
+              ),
+            )
+          : null;
+
+      return {
+        sessionId: session.id,
+        planId: session.planId,
+        status: session.status,
+        environment:
+          session.plan.environment,
+        targetMuscle:
+          session.plan.targetMuscle,
+        startedAt: session.startedAt,
+        completedAt: session.completedAt,
+        durationMinutes,
+        exerciseCount:
+          session.plan.exercises.length,
+        expectedSetCount,
+        completedSetCount,
+        actualTotalReps,
+        exercises:
+          session.plan.exercises.map(
+            (planExercise) => ({
+              exerciseId:
+                planExercise.exerciseId,
+              exerciseName:
+                planExercise.exercise.name,
+              order: planExercise.order,
+              sets: planExercise.sets,
+              reps: planExercise.reps,
+              targetWeightKg:
+                planExercise.targetWeightKg,
+            }),
+          ),
+      };
+    });
+
+    return {
+      userId,
+      count: history.length,
+      history,
+    };
+  }
+
   async findExerciseHistory(
     userId: string,
     exerciseId: number,
