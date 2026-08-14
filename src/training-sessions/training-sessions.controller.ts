@@ -102,6 +102,41 @@ export class TrainingSessionsController {
     };
   }
 
+  @Get('user/:userId/consistency')
+  async getUserConsistency(
+    @Param('userId') userId: string,
+    @Query('utcOffsetMinutes')
+    utcOffsetMinutes?: string,
+  ) {
+    let parsedUtcOffsetMinutes = 480;
+
+    if (utcOffsetMinutes !== undefined) {
+      parsedUtcOffsetMinutes =
+        Number(utcOffsetMinutes);
+
+      if (
+        !Number.isInteger(
+          parsedUtcOffsetMinutes,
+        ) ||
+        parsedUtcOffsetMinutes < -720 ||
+        parsedUtcOffsetMinutes > 840
+      ) {
+        throw new BadRequestException(
+          'utcOffsetMinutes must be an integer between -720 and 840',
+        );
+      }
+    }
+
+    return {
+      status: 'ok',
+      data:
+        await this.trainingSessionsService.getUserConsistency(
+          userId,
+          parsedUtcOffsetMinutes,
+        ),
+    };
+  }
+
   @Get('user/:userId/daily-stats')
   async getUserDailyStats(
     @Param('userId') userId: string,

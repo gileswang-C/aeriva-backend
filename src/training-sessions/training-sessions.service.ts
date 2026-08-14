@@ -540,6 +540,233 @@ export class TrainingSessionsService {
     };
   }
 
+  async getUserConsistency(
+    userId: string,
+    utcOffsetMinutes = 480,
+  ) {
+    const sessions =
+      await this.prisma.trainingSession.findMany({
+        where: {
+          userId,
+          status: 'COMPLETED',
+        },
+        orderBy: {
+          completedAt: 'asc',
+        },
+        select: {
+          completedAt: true,
+        },
+      });
+
+    const offsetMs =
+      utcOffsetMinutes * 60 * 1000;
+
+    const oneDayMs =
+      24 * 60 * 60 * 1000;
+
+    const now = new Date();
+
+    const shiftedNow = new Date(
+      now.getTime() + offsetMs,
+    );
+
+    const todayLocalStartMs =
+      Date.UTC(
+        shiftedNow.getUTCFullYear(),
+        shiftedNow.getUTCMonth(),
+        shiftedNow.getUTCDate(),
+      );
+
+    const toLocalDateKey = (
+      date: Date,
+    ) =>
+      new Date(
+        date.getTime() + offsetMs,
+      )
+        .toISOString()
+        .slice(0, 10);
+
+    const completedDates = sessions
+      .map((session) => session.completedAt)
+      .filter(
+        (completedAt): completedAt is Date =>
+          completedAt !== null,
+      );
+
+    const trainingDateSet =
+      new Set(
+        completedDates.map(
+          toLocalDateKey,
+        ),
+      );
+
+    const trainingDates =
+      Array.from(trainingDateSet).sort();
+
+    const getLocalDateKeyByOffset = (
+      daysAgo: number,
+    ) =>
+      new Date(
+        todayLocalStartMs -
+          daysAgo * oneDayMs,
+      )
+        .toISOString()
+        .slice(0, 10);
+
+    const recent7DateSet =
+      new Set(
+        Array.from(
+          { length: 7 },
+          (_, index) =>
+            getLocalDateKeyByOffset(index),
+        ),
+      );
+
+    const recent30DateSet =
+      new Set(
+        Array.from(
+          { length: 30 },
+          (_, index) =>
+            getLocalDateKeyByOffset(index),
+        ),
+      );
+
+    const recent7TrainingDays =
+      trainingDates.filter(
+        (date) =>
+          recent7DateSet.has(date),
+      ).length;
+
+    const recent30TrainingDays =
+      trainingDates.filter(
+        (date) =>
+          recent30DateSet.has(date),
+      ).length;
+
+    const recent7SessionCount =
+      completedDates.filter(
+        (completedAt) =>
+          recent7DateSet.has(
+            toLocalDateKey(completedAt),
+          ),
+      ).length;
+
+    const recent30SessionCount =
+      completedDates.filter(
+        (completedAt) =>
+          recent30DateSet.has(
+            toLocalDateKey(completedAt),
+          ),
+      ).length;
+
+    let currentStreakDays = 0;
+
+    const todayKey =
+      getLocalDateKeyByOffset(0);
+
+    const yesterdayKey =
+      getLocalDateKeyByOffset(1);
+
+    let currentStreakStartOffset:
+      number | null = null;
+
+    if (trainingDateSet.has(todayKey)) {
+      currentStreakStartOffset = 0;
+    } else if (
+      trainingDateSet.has(yesterdayKey)
+    ) {
+      currentStreakStartOffset = 1;
+    }
+
+    if (
+      currentStreakStartOffset !== null
+    ) {
+      let daysAgo =
+        currentStreakStartOffset;
+
+      while (
+        trainingDateSet.has(
+          getLocalDateKeyByOffset(
+            daysAgo,
+          ),
+        )
+      ) {
+        currentStreakDays += 1;
+        daysAgo += 1;
+      }
+    }
+
+    let longestStreakDays = 0;
+    let runningStreakDays = 0;
+    let previousDateMs:
+      number | null = null;
+
+    for (const date of trainingDates) {
+      const currentDateMs =
+        Date.parse(
+          `${date}T00:00:00.000Z`,
+        );
+
+      if (
+        previousDateMs !== null &&
+        currentDateMs -
+          previousDateMs ===
+          oneDayMs
+      ) {
+        runningStreakDays += 1;
+      } else {
+        runningStreakDays = 1;
+      }
+
+      longestStreakDays =
+        Math.max(
+          longestStreakDays,
+          runningStreakDays,
+        );
+
+      previousDateMs =
+        currentDateMs;
+    }
+
+    const latestTrainingDate =
+      trainingDates.length > 0
+        ? trainingDates[
+            trainingDates.length - 1
+          ]
+        : null;
+
+    const averageSessionsPerWeek30Days =
+      Math.round(
+        ((recent30SessionCount / 30) *
+          7) *
+          10,
+      ) / 10;
+
+    return {
+      userId,
+      utcOffsetMinutes,
+      recent7Days: {
+        trainingDays:
+          recent7TrainingDays,
+        sessionCount:
+          recent7SessionCount,
+      },
+      recent30Days: {
+        trainingDays:
+          recent30TrainingDays,
+        sessionCount:
+          recent30SessionCount,
+        averageSessionsPerWeek:
+          averageSessionsPerWeek30Days,
+      },
+      currentStreakDays,
+      longestStreakDays,
+      latestTrainingDate,
+      totalTrainingDays:
+        trainingDates.length,
+    };
+  }
+
   async getUserDailyStats(
     userId: string,
     days = 7,
