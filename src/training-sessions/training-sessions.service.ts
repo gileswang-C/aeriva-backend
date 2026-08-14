@@ -540,6 +540,178 @@ export class TrainingSessionsService {
     };
   }
 
+  async getUserWeeklyComparison(
+    userId: string,
+    utcOffsetMinutes = 480,
+  ) {
+    const stats14Days =
+      await this.getUserDailyStats(
+        userId,
+        14,
+        utcOffsetMinutes,
+      );
+
+    const previousDays =
+      stats14Days.dailyStats.slice(0, 7);
+
+    const currentDays =
+      stats14Days.dailyStats.slice(7, 14);
+
+    const aggregate = (
+      days: typeof stats14Days.dailyStats,
+    ) => {
+      const trainingDays =
+        days.filter(
+          (day) =>
+            day.trainingSessionCount > 0,
+        ).length;
+
+      const trainingSessionCount =
+        days.reduce(
+          (total, day) =>
+            total +
+            day.trainingSessionCount,
+          0,
+        );
+
+      const totalDurationMinutes =
+        days.reduce(
+          (total, day) =>
+            total +
+            day.totalDurationMinutes,
+          0,
+        );
+
+      const totalCompletedSets =
+        days.reduce(
+          (total, day) =>
+            total +
+            day.totalCompletedSets,
+          0,
+        );
+
+      const totalReps =
+        days.reduce(
+          (total, day) =>
+            total +
+            day.totalReps,
+          0,
+        );
+
+      return {
+        startDate:
+          days[0]?.date ?? null,
+        endDate:
+          days[days.length - 1]
+            ?.date ?? null,
+        trainingDays,
+        trainingSessionCount,
+        totalDurationMinutes,
+        totalCompletedSets,
+        totalReps,
+      };
+    };
+
+    const previousWeek =
+      aggregate(previousDays);
+
+    const currentWeek =
+      aggregate(currentDays);
+
+    const changes = {
+      trainingDays:
+        currentWeek.trainingDays -
+        previousWeek.trainingDays,
+
+      trainingSessionCount:
+        currentWeek.trainingSessionCount -
+        previousWeek.trainingSessionCount,
+
+      totalDurationMinutes:
+        currentWeek.totalDurationMinutes -
+        previousWeek.totalDurationMinutes,
+
+      totalCompletedSets:
+        currentWeek.totalCompletedSets -
+        previousWeek.totalCompletedSets,
+
+      totalReps:
+        currentWeek.totalReps -
+        previousWeek.totalReps,
+    };
+
+    let trend:
+      | 'NOT_ENOUGH_DATA'
+      | 'IMPROVING'
+      | 'STABLE'
+      | 'DECLINING';
+
+    let trendReason: string;
+
+    if (
+      previousWeek.trainingSessionCount === 0
+    ) {
+      trend = 'NOT_ENOUGH_DATA';
+
+      if (
+        currentWeek.trainingSessionCount > 0
+      ) {
+        trendReason =
+          `前 7 天没有已完成训练记录，最近 7 天已完成 ${currentWeek.trainingSessionCount} 次训练，暂时缺少可比较基线。`;
+      } else {
+        trendReason =
+          '前后两个 7 天周期都没有已完成训练记录，暂时无法判断训练趋势。';
+      }
+    } else {
+      const comparisonSignals = [
+        changes.trainingDays,
+        changes.trainingSessionCount,
+        changes.totalCompletedSets,
+        changes.totalReps,
+      ];
+
+      const improvedSignals =
+        comparisonSignals.filter(
+          (value) => value > 0,
+        ).length;
+
+      const declinedSignals =
+        comparisonSignals.filter(
+          (value) => value < 0,
+        ).length;
+
+      if (
+        improvedSignals >= 3 &&
+        improvedSignals > declinedSignals
+      ) {
+        trend = 'IMPROVING';
+        trendReason =
+          `最近 7 天相比前 7 天，训练天数变化 ${changes.trainingDays >= 0 ? '+' : ''}${changes.trainingDays} 天，训练次数变化 ${changes.trainingSessionCount >= 0 ? '+' : ''}${changes.trainingSessionCount} 次，完成组数变化 ${changes.totalCompletedSets >= 0 ? '+' : ''}${changes.totalCompletedSets} 组，整体训练投入呈上升趋势。`;
+      } else if (
+        declinedSignals >= 3 &&
+        declinedSignals > improvedSignals
+      ) {
+        trend = 'DECLINING';
+        trendReason =
+          `最近 7 天相比前 7 天，训练天数变化 ${changes.trainingDays >= 0 ? '+' : ''}${changes.trainingDays} 天，训练次数变化 ${changes.trainingSessionCount >= 0 ? '+' : ''}${changes.trainingSessionCount} 次，完成组数变化 ${changes.totalCompletedSets >= 0 ? '+' : ''}${changes.totalCompletedSets} 组，整体训练投入有所下降。`;
+      } else {
+        trend = 'STABLE';
+        trendReason =
+          `最近 7 天与前 7 天相比，各项训练指标有升有降或变化较小，暂时判断为整体稳定。`;
+      }
+    }
+
+    return {
+      userId,
+      utcOffsetMinutes,
+      previousWeek,
+      currentWeek,
+      changes,
+      trend,
+      trendReason,
+    };
+  }
+
   async getUserWeeklyReport(
     userId: string,
     utcOffsetMinutes = 480,

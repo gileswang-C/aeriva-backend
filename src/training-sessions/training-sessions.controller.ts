@@ -102,6 +102,41 @@ export class TrainingSessionsController {
     };
   }
 
+  @Get('user/:userId/weekly-comparison')
+  async getUserWeeklyComparison(
+    @Param('userId') userId: string,
+    @Query('utcOffsetMinutes')
+    utcOffsetMinutes?: string,
+  ) {
+    let parsedUtcOffsetMinutes = 480;
+
+    if (utcOffsetMinutes !== undefined) {
+      parsedUtcOffsetMinutes =
+        Number(utcOffsetMinutes);
+
+      if (
+        !Number.isInteger(
+          parsedUtcOffsetMinutes,
+        ) ||
+        parsedUtcOffsetMinutes < -720 ||
+        parsedUtcOffsetMinutes > 840
+      ) {
+        throw new BadRequestException(
+          'utcOffsetMinutes must be an integer between -720 and 840',
+        );
+      }
+    }
+
+    return {
+      status: 'ok',
+      data:
+        await this.trainingSessionsService.getUserWeeklyComparison(
+          userId,
+          parsedUtcOffsetMinutes,
+        ),
+    };
+  }
+
   @Get('user/:userId/weekly-report')
   async getUserWeeklyReport(
     @Param('userId') userId: string,
