@@ -58,6 +58,19 @@ export class TrainingSessionsController {
     };
   }
 
+  @Get('current/:userId')
+  async findCurrentByUserId(
+    @Param('userId') userId: string,
+  ) {
+    return {
+      status: 'ok',
+      data:
+        await this.trainingSessionsService.findCurrentByUserId(
+          userId,
+        ),
+    };
+  }
+
   @Post(':sessionId/sets')
   async logSet(
     @Param('sessionId', ParseIntPipe)

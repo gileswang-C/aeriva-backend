@@ -62,6 +62,25 @@ export class TrainingSessionsService {
     };
   }
 
+  async findCurrentByUserId(userId: string) {
+    const activeSession =
+      await this.prisma.trainingSession.findFirst({
+        where: {
+          userId,
+          status: 'IN_PROGRESS',
+        },
+        orderBy: {
+          startedAt: 'desc',
+        },
+      });
+
+    if (!activeSession) {
+      return null;
+    }
+
+    return this.findById(activeSession.id);
+  }
+
   async findById(sessionId: number) {
     const session =
       await this.prisma.trainingSession.findUnique({
