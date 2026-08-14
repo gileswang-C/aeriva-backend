@@ -71,6 +71,37 @@ export class TrainingSessionsController {
     };
   }
 
+  @Get('user/:userId/summary')
+  async getUserSummary(
+    @Param('userId') userId: string,
+    @Query('days') days?: string,
+  ) {
+    let parsedDays = 7;
+
+    if (days !== undefined) {
+      parsedDays = Number(days);
+
+      if (
+        !Number.isInteger(parsedDays) ||
+        parsedDays < 1 ||
+        parsedDays > 365
+      ) {
+        throw new BadRequestException(
+          'days must be an integer between 1 and 365',
+        );
+      }
+    }
+
+    return {
+      status: 'ok',
+      data:
+        await this.trainingSessionsService.getUserSummary(
+          userId,
+          parsedDays,
+        ),
+    };
+  }
+
   @Get('user/:userId')
   async findUserHistory(
     @Param('userId') userId: string,

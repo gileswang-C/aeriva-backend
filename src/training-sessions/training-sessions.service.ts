@@ -540,6 +540,114 @@ export class TrainingSessionsService {
     };
   }
 
+  async getUserSummary(
+    userId: string,
+    days = 7,
+  ) {
+    const periodEnd = new Date();
+
+    const periodStart = new Date(
+      periodEnd.getTime() -
+        days * 24 * 60 * 60 * 1000,
+    );
+
+    const sessions =
+      await this.prisma.trainingSession.findMany({
+        where: {
+          userId,
+          status: 'COMPLETED',
+          completedAt: {
+            gte: periodStart,
+            lte: periodEnd,
+          },
+        },
+        orderBy: {
+          completedAt: 'desc',
+        },
+        include: {
+          plan: true,
+          sets: {
+            where: {
+              completed: true,
+            },
+          },
+        },
+      });
+
+    let totalDurationMinutes = 0;
+    let totalCompletedSets = 0;
+    let totalReps = 0;
+
+    const targetMuscleCounts: Record<
+      string,
+      number
+    > = {};
+
+    for (const session of sessions) {
+      if (session.completedAt) {
+        const durationMinutes = Math.max(
+          0,
+          Math.round(
+            (session.completedAt.getTime() -
+              session.startedAt.getTime()) /
+              60000,
+          ),
+        );
+
+        totalDurationMinutes +=
+          durationMinutes;
+      }
+
+      totalCompletedSets +=
+        session.sets.length;
+
+      totalReps += session.sets.reduce(
+        (total, set) =>
+          total + (set.reps ?? 0),
+        0,
+      );
+
+      const targetMuscle =
+        session.plan.targetMuscle;
+
+      targetMuscleCounts[targetMuscle] =
+        (targetMuscleCounts[targetMuscle] ??
+          0) + 1;
+    }
+
+    const targetMuscleDistribution =
+      Object.entries(targetMuscleCounts)
+        .map(
+          ([
+            targetMuscle,
+            sessionCount,
+          ]) => ({
+            targetMuscle,
+            sessionCount,
+          }),
+        )
+        .sort(
+          (a, b) =>
+            b.sessionCount -
+            a.sessionCount,
+        );
+
+    return {
+      userId,
+      days,
+      periodStart,
+      periodEnd,
+      trainingSessionCount:
+        sessions.length,
+      totalDurationMinutes,
+      totalCompletedSets,
+      totalReps,
+      targetMuscleDistribution,
+      latestTrainingAt:
+        sessions[0]?.completedAt ?? null,
+    };
+  }
+
   async findUserHistory(
     userId: string,
     limit = 20,
