@@ -540,6 +540,157 @@ export class TrainingSessionsService {
     };
   }
 
+  async getUserWeeklyReport(
+    userId: string,
+    utcOffsetMinutes = 480,
+  ) {
+    const dailyStats =
+      await this.getUserDailyStats(
+        userId,
+        7,
+        utcOffsetMinutes,
+      );
+
+    const consistency =
+      await this.getUserConsistency(
+        userId,
+        utcOffsetMinutes,
+      );
+
+    const sessions =
+      await this.prisma.trainingSession.findMany({
+        where: {
+          userId,
+          status: 'COMPLETED',
+          completedAt: {
+            gte: dailyStats.periodStart,
+            lt: dailyStats.periodEndExclusive,
+          },
+        },
+        include: {
+          plan: true,
+        },
+      });
+
+    const trainingDays =
+      dailyStats.dailyStats.filter(
+        (day) =>
+          day.trainingSessionCount > 0,
+      ).length;
+
+    const trainingSessionCount =
+      dailyStats.dailyStats.reduce(
+        (total, day) =>
+          total +
+          day.trainingSessionCount,
+        0,
+      );
+
+    const totalDurationMinutes =
+      dailyStats.dailyStats.reduce(
+        (total, day) =>
+          total +
+          day.totalDurationMinutes,
+        0,
+      );
+
+    const totalCompletedSets =
+      dailyStats.dailyStats.reduce(
+        (total, day) =>
+          total +
+          day.totalCompletedSets,
+        0,
+      );
+
+    const totalReps =
+      dailyStats.dailyStats.reduce(
+        (total, day) =>
+          total +
+          day.totalReps,
+        0,
+      );
+
+    const targetMuscleCounts: Record<
+      string,
+      number
+    > = {};
+
+    for (const session of sessions) {
+      const targetMuscle =
+        session.plan.targetMuscle;
+
+      targetMuscleCounts[targetMuscle] =
+        (targetMuscleCounts[targetMuscle] ??
+          0) + 1;
+    }
+
+    const targetMuscleDistribution =
+      Object.entries(targetMuscleCounts)
+        .map(
+          ([
+            targetMuscle,
+            sessionCount,
+          ]) => ({
+            targetMuscle,
+            sessionCount,
+          }),
+        )
+        .sort(
+          (a, b) =>
+            b.sessionCount -
+            a.sessionCount,
+        );
+
+    const primaryTargetMuscle =
+      targetMuscleDistribution[0]
+        ?.targetMuscle ?? null;
+
+    let summaryText: string;
+
+    if (trainingSessionCount === 0) {
+      summaryText =
+        '最近 7 天暂无已完成训练记录，可以从一次轻量训练重新开始积累节奏。';
+    } else {
+      const muscleText =
+        primaryTargetMuscle
+          ? `主要训练部位为${primaryTargetMuscle}。`
+          : '';
+
+      const streakText =
+        consistency.currentStreakDays > 0
+          ? `当前连续训练 ${consistency.currentStreakDays} 天。`
+          : '';
+
+      summaryText =
+        `最近 7 天训练了 ${trainingDays} 天，共完成 ${trainingSessionCount} 次训练、${totalCompletedSets} 组、${totalReps} 次动作。${muscleText}${streakText}`;
+    }
+
+    return {
+      userId,
+      utcOffsetMinutes,
+      periodStart:
+        dailyStats.periodStart,
+      periodEndExclusive:
+        dailyStats.periodEndExclusive,
+      trainingDays,
+      trainingSessionCount,
+      totalDurationMinutes,
+      totalCompletedSets,
+      totalReps,
+      targetMuscleDistribution,
+      primaryTargetMuscle,
+      currentStreakDays:
+        consistency.currentStreakDays,
+      longestStreakDays:
+        consistency.longestStreakDays,
+      latestTrainingDate:
+        consistency.latestTrainingDate,
+      dailyStats:
+        dailyStats.dailyStats,
+      summaryText,
+    };
+  }
+
   async getUserConsistency(
     userId: string,
     utcOffsetMinutes = 480,
