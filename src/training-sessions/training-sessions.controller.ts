@@ -102,6 +102,58 @@ export class TrainingSessionsController {
     };
   }
 
+  @Get('user/:userId/daily-stats')
+  async getUserDailyStats(
+    @Param('userId') userId: string,
+    @Query('days') days?: string,
+    @Query('utcOffsetMinutes')
+    utcOffsetMinutes?: string,
+  ) {
+    let parsedDays = 7;
+    let parsedUtcOffsetMinutes = 480;
+
+    if (days !== undefined) {
+      parsedDays = Number(days);
+
+      if (
+        !Number.isInteger(parsedDays) ||
+        parsedDays < 1 ||
+        parsedDays > 365
+      ) {
+        throw new BadRequestException(
+          'days must be an integer between 1 and 365',
+        );
+      }
+    }
+
+    if (utcOffsetMinutes !== undefined) {
+      parsedUtcOffsetMinutes =
+        Number(utcOffsetMinutes);
+
+      if (
+        !Number.isInteger(
+          parsedUtcOffsetMinutes,
+        ) ||
+        parsedUtcOffsetMinutes < -720 ||
+        parsedUtcOffsetMinutes > 840
+      ) {
+        throw new BadRequestException(
+          'utcOffsetMinutes must be an integer between -720 and 840',
+        );
+      }
+    }
+
+    return {
+      status: 'ok',
+      data:
+        await this.trainingSessionsService.getUserDailyStats(
+          userId,
+          parsedDays,
+          parsedUtcOffsetMinutes,
+        ),
+    };
+  }
+
   @Get('user/:userId')
   async findUserHistory(
     @Param('userId') userId: string,

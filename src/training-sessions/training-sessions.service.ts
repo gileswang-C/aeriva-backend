@@ -540,6 +540,153 @@ export class TrainingSessionsService {
     };
   }
 
+  async getUserDailyStats(
+    userId: string,
+    days = 7,
+    utcOffsetMinutes = 480,
+  ) {
+    const now = new Date();
+
+    const offsetMs =
+      utcOffsetMinutes * 60 * 1000;
+
+    const shiftedNow = new Date(
+      now.getTime() + offsetMs,
+    );
+
+    const localTodayStartUtcMs =
+      Date.UTC(
+        shiftedNow.getUTCFullYear(),
+        shiftedNow.getUTCMonth(),
+        shiftedNow.getUTCDate(),
+      ) - offsetMs;
+
+    const oneDayMs =
+      24 * 60 * 60 * 1000;
+
+    const periodStart = new Date(
+      localTodayStartUtcMs -
+        (days - 1) * oneDayMs,
+    );
+
+    const periodEndExclusive = new Date(
+      localTodayStartUtcMs +
+        oneDayMs,
+    );
+
+    const sessions =
+      await this.prisma.trainingSession.findMany({
+        where: {
+          userId,
+          status: 'COMPLETED',
+          completedAt: {
+            gte: periodStart,
+            lt: periodEndExclusive,
+          },
+        },
+        orderBy: {
+          completedAt: 'asc',
+        },
+        include: {
+          sets: {
+            where: {
+              completed: true,
+            },
+          },
+        },
+      });
+
+    const dailyMap = new Map<
+      string,
+      {
+        date: string;
+        trainingSessionCount: number;
+        totalDurationMinutes: number;
+        totalCompletedSets: number;
+        totalReps: number;
+      }
+    >();
+
+    for (let index = 0; index < days; index++) {
+      const dayStartUtcMs =
+        periodStart.getTime() +
+        index * oneDayMs;
+
+      const shiftedDay = new Date(
+        dayStartUtcMs + offsetMs,
+      );
+
+      const date =
+        shiftedDay
+          .toISOString()
+          .slice(0, 10);
+
+      dailyMap.set(date, {
+        date,
+        trainingSessionCount: 0,
+        totalDurationMinutes: 0,
+        totalCompletedSets: 0,
+        totalReps: 0,
+      });
+    }
+
+    for (const session of sessions) {
+      if (!session.completedAt) {
+        continue;
+      }
+
+      const shiftedCompletedAt = new Date(
+        session.completedAt.getTime() +
+          offsetMs,
+      );
+
+      const date =
+        shiftedCompletedAt
+          .toISOString()
+          .slice(0, 10);
+
+      const day = dailyMap.get(date);
+
+      if (!day) {
+        continue;
+      }
+
+      day.trainingSessionCount += 1;
+
+      day.totalDurationMinutes +=
+        Math.max(
+          0,
+          Math.round(
+            (session.completedAt.getTime() -
+              session.startedAt.getTime()) /
+              60000,
+          ),
+        );
+
+      day.totalCompletedSets +=
+        session.sets.length;
+
+      day.totalReps +=
+        session.sets.reduce(
+          (total, set) =>
+            total + (set.reps ?? 0),
+          0,
+        );
+    }
+
+    const dailyStats =
+      Array.from(dailyMap.values());
+
+    return {
+      userId,
+      days,
+      utcOffsetMinutes,
+      periodStart,
+      periodEndExclusive,
+      dailyStats,
+    };
+  }
+
   async getUserSummary(
     userId: string,
     days = 7,
