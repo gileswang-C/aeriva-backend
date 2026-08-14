@@ -43,6 +43,29 @@ export class BodyStateController {
     };
   }
 
+  @Get(':userId/today/readiness')
+  async getTodayReadiness(
+    @Param('userId') userId: string,
+    @Query('utcOffsetMinutes')
+    utcOffsetMinutes?: string,
+  ) {
+    this.validateUserId(userId);
+
+    const parsedUtcOffsetMinutes =
+      this.parseUtcOffsetMinutes(
+        utcOffsetMinutes,
+      );
+
+    return {
+      status: 'ok',
+      data:
+        await this.bodyStateService.getTodayReadiness(
+          userId,
+          parsedUtcOffsetMinutes,
+        ),
+    };
+  }
+
   @Get(':userId/today')
   async findToday(
     @Param('userId') userId: string,

@@ -139,6 +139,243 @@ export class BodyStateService {
     return this.mapRecord(record);
   }
 
+  async getTodayReadiness(
+    userId: string,
+    utcOffsetMinutes = 480,
+  ) {
+    const bodyState =
+      await this.findToday(
+        userId,
+        utcOffsetMinutes,
+      );
+
+    if (!bodyState) {
+      return {
+        userId,
+        localDate:
+          this.getLocalDate(
+            utcOffsetMinutes,
+          ),
+        utcOffsetMinutes,
+        hasBodyState: false,
+        readinessScore: null,
+        readinessStatus: 'NO_DATA',
+        reasons: [
+          '今天还没有身体状态记录。',
+        ],
+        painAreas: [],
+        recommendedAction:
+          '先完成今日身体状态记录，再生成训练建议。',
+      };
+    }
+
+    let score = 100;
+    const reasons: string[] = [];
+
+    if (
+      bodyState.sleepHours !== null
+    ) {
+      if (bodyState.sleepHours < 5) {
+        score -= 25;
+        reasons.push(
+          '睡眠不足 5 小时，恢复可能明显不足。',
+        );
+      } else if (
+        bodyState.sleepHours < 6
+      ) {
+        score -= 18;
+        reasons.push(
+          '睡眠不足 6 小时，建议降低训练压力。',
+        );
+      } else if (
+        bodyState.sleepHours < 7
+      ) {
+        score -= 10;
+        reasons.push(
+          '睡眠时间低于 7 小时，恢复状态一般。',
+        );
+      }
+    }
+
+    if (
+      bodyState.sleepQuality !== null
+    ) {
+      if (
+        bodyState.sleepQuality === 1
+      ) {
+        score -= 15;
+        reasons.push(
+          '睡眠质量很差。',
+        );
+      } else if (
+        bodyState.sleepQuality === 2
+      ) {
+        score -= 10;
+        reasons.push(
+          '睡眠质量偏低。',
+        );
+      } else if (
+        bodyState.sleepQuality === 3
+      ) {
+        score -= 5;
+        reasons.push(
+          '睡眠质量一般。',
+        );
+      }
+    }
+
+    if (
+      bodyState.energyLevel !== null
+    ) {
+      if (
+        bodyState.energyLevel === 1
+      ) {
+        score -= 25;
+        reasons.push(
+          '当前精力非常低。',
+        );
+      } else if (
+        bodyState.energyLevel === 2
+      ) {
+        score -= 18;
+        reasons.push(
+          '当前精力偏低。',
+        );
+      } else if (
+        bodyState.energyLevel === 3
+      ) {
+        score -= 8;
+        reasons.push(
+          '当前精力一般。',
+        );
+      }
+    }
+
+    if (
+      bodyState.sorenessLevel !== null
+    ) {
+      if (
+        bodyState.sorenessLevel === 5
+      ) {
+        score -= 25;
+        reasons.push(
+          '肌肉酸痛程度很高。',
+        );
+      } else if (
+        bodyState.sorenessLevel === 4
+      ) {
+        score -= 15;
+        reasons.push(
+          '肌肉酸痛程度偏高。',
+        );
+      } else if (
+        bodyState.sorenessLevel === 3
+      ) {
+        score -= 5;
+        reasons.push(
+          '存在中等程度肌肉酸痛。',
+        );
+      }
+    }
+
+    if (
+      bodyState.stressLevel !== null
+    ) {
+      if (
+        bodyState.stressLevel === 5
+      ) {
+        score -= 15;
+        reasons.push(
+          '当前压力水平很高。',
+        );
+      } else if (
+        bodyState.stressLevel === 4
+      ) {
+        score -= 10;
+        reasons.push(
+          '当前压力水平偏高。',
+        );
+      } else if (
+        bodyState.stressLevel === 3
+      ) {
+        score -= 5;
+        reasons.push(
+          '当前存在一定压力。',
+        );
+      }
+    }
+
+    const painAreas =
+      bodyState.painAreas ?? [];
+
+    if (painAreas.length > 0) {
+      score -= 5;
+
+      reasons.push(
+        `当前记录疼痛部位：${painAreas.join('、')}。`,
+      );
+    }
+
+    score = Math.max(
+      0,
+      Math.min(100, score),
+    );
+
+    let readinessStatus:
+      | 'READY'
+      | 'REDUCE_INTENSITY'
+      | 'AVOID_PAIN_AREA'
+      | 'RECOVERY';
+
+    let recommendedAction: string;
+
+    if (score < 50) {
+      readinessStatus = 'RECOVERY';
+
+      recommendedAction =
+        '今天优先恢复，可选择休息、散步或轻量活动，避免高强度训练。';
+    } else if (
+      painAreas.length > 0
+    ) {
+      readinessStatus =
+        'AVOID_PAIN_AREA';
+
+      recommendedAction =
+        `避免训练疼痛部位（${painAreas.join('、')}），并适当降低整体训练强度，可切换到无疼痛的训练部位。`;
+    } else if (score < 75) {
+      readinessStatus =
+        'REDUCE_INTENSITY';
+
+      recommendedAction =
+        '今天可以训练，但建议降低重量或训练组数，避免力竭。';
+    } else {
+      readinessStatus = 'READY';
+
+      recommendedAction =
+        '当前身体状态适合按计划训练，训练过程中继续观察身体反馈。';
+    }
+
+    if (reasons.length === 0) {
+      reasons.push(
+        '今日身体状态指标整体稳定。',
+      );
+    }
+
+    return {
+      userId,
+      localDate:
+        bodyState.localDate,
+      utcOffsetMinutes,
+      hasBodyState: true,
+      readinessScore: score,
+      readinessStatus,
+      reasons,
+      painAreas,
+      recommendedAction,
+      bodyState,
+    };
+  }
+
   private getLocalDate(
     utcOffsetMinutes: number,
   ) {
