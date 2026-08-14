@@ -9,6 +9,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { TrainingSessionsService } from './training-sessions.service';
+import { TrainingAnalyticsService } from './training-analytics.service';
 
 interface StartTrainingSessionBody {
   userId: string;
@@ -26,6 +27,7 @@ interface LogTrainingSetBody {
 export class TrainingSessionsController {
   constructor(
     private readonly trainingSessionsService: TrainingSessionsService,
+    private readonly trainingAnalyticsService: TrainingAnalyticsService,
   ) {}
 
   @Post('start')
@@ -95,7 +97,7 @@ export class TrainingSessionsController {
     return {
       status: 'ok',
       data:
-        await this.trainingSessionsService.getUserSummary(
+        await this.trainingAnalyticsService.getUserSummary(
           userId,
           parsedDays,
         ),
@@ -130,7 +132,7 @@ export class TrainingSessionsController {
     return {
       status: 'ok',
       data:
-        await this.trainingSessionsService.getUserWeeklyComparison(
+        await this.trainingAnalyticsService.getUserWeeklyComparison(
           userId,
           parsedUtcOffsetMinutes,
         ),
@@ -165,7 +167,7 @@ export class TrainingSessionsController {
     return {
       status: 'ok',
       data:
-        await this.trainingSessionsService.getUserWeeklyReport(
+        await this.trainingAnalyticsService.getUserWeeklyReport(
           userId,
           parsedUtcOffsetMinutes,
         ),
@@ -200,7 +202,7 @@ export class TrainingSessionsController {
     return {
       status: 'ok',
       data:
-        await this.trainingSessionsService.getUserConsistency(
+        await this.trainingAnalyticsService.getUserConsistency(
           userId,
           parsedUtcOffsetMinutes,
         ),
@@ -251,7 +253,7 @@ export class TrainingSessionsController {
     return {
       status: 'ok',
       data:
-        await this.trainingSessionsService.getUserDailyStats(
+        await this.trainingAnalyticsService.getUserDailyStats(
           userId,
           parsedDays,
           parsedUtcOffsetMinutes,
@@ -282,7 +284,7 @@ export class TrainingSessionsController {
     return {
       status: 'ok',
       data:
-        await this.trainingSessionsService.findUserHistory(
+        await this.trainingAnalyticsService.findUserHistory(
           userId,
           parsedLimit,
         ),
@@ -389,7 +391,7 @@ export class TrainingSessionsController {
     return {
       status: 'ok',
       data:
-        await this.trainingSessionsService.findExerciseHistory(
+        await this.trainingAnalyticsService.findExerciseHistory(
           userId,
           exerciseId,
           parsedLimit,
@@ -405,7 +407,7 @@ export class TrainingSessionsController {
     return {
       status: 'ok',
       data:
-        await this.trainingSessionsService.analyze(
+        await this.trainingAnalyticsService.analyze(
           sessionId,
         ),
     };
