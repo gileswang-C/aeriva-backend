@@ -88,7 +88,18 @@ export class TrainingSessionsService {
           id: sessionId,
         },
         include: {
-          plan: true,
+          plan: {
+            include: {
+              exercises: {
+                include: {
+                  exercise: true,
+                },
+                orderBy: {
+                  order: 'asc',
+                },
+              },
+            },
+          },
           sets: {
             orderBy: [
               {
@@ -108,6 +119,36 @@ export class TrainingSessionsService {
       );
     }
 
+    const exercises = session.plan.exercises.map(
+      (planExercise) => {
+        const recordedSets = session.sets
+          .filter(
+            (set) =>
+              set.planExerciseId === planExercise.id,
+          )
+          .map((set) => ({
+            setLogId: set.id,
+            setNumber: set.setNumber,
+            reps: set.reps,
+            weightKg: set.weightKg,
+            completed: set.completed,
+          }));
+
+        return {
+          planExerciseId: planExercise.id,
+          exerciseId: planExercise.exerciseId,
+          exerciseName: planExercise.exercise.name,
+          order: planExercise.order,
+          sets: planExercise.sets,
+          reps: planExercise.reps,
+          restSeconds: planExercise.restSeconds,
+          targetWeightKg:
+            planExercise.targetWeightKg,
+          recordedSets,
+        };
+      },
+    );
+
     return {
       sessionId: session.id,
       userId: session.userId,
@@ -118,6 +159,7 @@ export class TrainingSessionsService {
       plan: {
         environment: session.plan.environment,
         targetMuscle: session.plan.targetMuscle,
+        exercises,
       },
       sets: session.sets,
     };
