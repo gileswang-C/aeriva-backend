@@ -120,3 +120,24 @@ model TrainingSetLog {
   @@index([sessionId])
   @@index([planExerciseId])
 }
+
+model DailyBodyState {
+  id               Int      @id @default(autoincrement())
+  userId           String
+  localDate        String
+  utcOffsetMinutes Int      @default(480)
+  sleepHours       Float?
+  sleepQuality     Int?
+  energyLevel      Int?
+  sorenessLevel    Int?
+  stressLevel      Int?
+  painAreasJson    String?
+  note             String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([userId, localDate])
+  @@index([userId])
+  @@index([localDate])
+}
+
