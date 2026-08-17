@@ -83,6 +83,19 @@ export class TrainingPlansService {
       readiness.readinessStatus ===
       'AVOID_PAIN_AREA'
     ) {
+      const plan =
+        await this.createPlan(
+          userId,
+          environment,
+          targetMuscle,
+          {
+            sets: 2,
+            weightMultiplier: 0.9,
+            painAreas:
+              readiness.painAreas,
+          },
+        );
+
       return {
         userId,
         environment,
@@ -91,12 +104,13 @@ export class TrainingPlansService {
           'PAIN_PROTECTION',
         readiness,
         adjustments: [
-          '暂不自动生成正式力量训练计划',
-          '避免训练已记录疼痛部位',
+          '自动过滤与当前疼痛区域相关的高风险动作',
+          '安全动作由 3 组减少为 2 组',
+          '有历史重量的动作目标重量降低约 10%',
         ],
-        plan: null,
+        plan,
         message:
-          '检测到疼痛部位。当前版本不会自动推断哪些力量训练动作安全，请先避开疼痛区域。',
+          '检测到疼痛部位，已过滤相关高风险动作并降低剩余训练强度。',
       };
     }
 
@@ -157,6 +171,75 @@ export class TrainingPlansService {
     };
   }
 
+  private checkExercisePainRisk(
+    exerciseName: string,
+    painAreas: string[],
+  ) {
+    const rules = [
+      {
+        keywords: [
+          '肩',
+          '胸',
+          '推',
+        ],
+        painKeywords: [
+          '肩',
+        ],
+      },
+      {
+        keywords: [
+          '腰',
+          '下背',
+          '硬拉',
+          '划船',
+        ],
+        painKeywords: [
+          '腰',
+          '下背',
+        ],
+      },
+      {
+        keywords: [
+          '腿',
+          '深蹲',
+          '蹬',
+        ],
+        painKeywords: [
+          '膝',
+        ],
+      },
+    ];
+
+    for (const rule of rules) {
+      const exerciseMatch =
+        rule.keywords.some(
+          (keyword) =>
+            exerciseName.includes(keyword),
+        );
+
+      const painMatch =
+        rule.painKeywords.some(
+          (keyword) =>
+            painAreas.some((area) =>
+              area.includes(keyword),
+            ),
+        );
+
+      if (exerciseMatch && painMatch) {
+        return {
+          risk: 'HIGH',
+          blocked: true,
+        };
+      }
+    }
+
+    return {
+      risk: 'LOW',
+      blocked: false,
+    };
+  }
+
+
   private async createPlan(
     userId: string,
     environment: string,
@@ -164,6 +247,7 @@ export class TrainingPlansService {
     options: {
       sets: number;
       weightMultiplier: number;
+      painAreas?: string[];
     },
   ) {
     if (
@@ -187,17 +271,31 @@ export class TrainingPlansService {
         targetMuscle,
       );
 
+    const painAreas =
+      options.painAreas ?? [];
+
+    const safeExercises =
+      painAreas.length === 0
+        ? availableExercises
+        : availableExercises.filter(
+            (exercise) =>
+              !this.checkExercisePainRisk(
+                exercise.name,
+                painAreas,
+              ).blocked,
+          );
+
     if (
-      availableExercises.length === 0
+      safeExercises.length === 0
     ) {
       throw new BadRequestException(
-        'No available exercises found for this user and environment',
+        'No safe exercises found for this user and current pain areas',
       );
     }
 
     const exercisePlans =
       await Promise.all(
-        availableExercises.map(
+        safeExercises.map(
           async (
             exercise,
             index,
