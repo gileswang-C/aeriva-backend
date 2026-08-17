@@ -208,16 +208,40 @@ export class TrainingPlansService {
     const painAreas =
       options.painAreas ?? [];
 
+    const painRiskAssessments =
+      availableExercises.map((exercise) => ({
+        exercise,
+        assessment:
+          this.painRiskService.checkExercisePainRisk(
+            exercise.name,
+            painAreas,
+          ),
+      }));
+
     const safeExercises =
       painAreas.length === 0
         ? availableExercises
-        : availableExercises.filter(
-            (exercise) =>
-              !this.painRiskService.checkExercisePainRisk(
-                exercise.name,
-                painAreas,
-              ).blocked,
-          );
+        : painRiskAssessments
+            .filter(
+              ({ assessment }) =>
+                !assessment.blocked,
+            )
+            .map(({ exercise }) => exercise);
+
+    const blockedExercises =
+      painAreas.length === 0
+        ? []
+        : painRiskAssessments
+            .filter(
+              ({ assessment }) =>
+                assessment.blocked,
+            )
+            .map(({ exercise, assessment }) => ({
+              exerciseId: exercise.id,
+              exerciseName: exercise.name,
+              risk: assessment.risk,
+              reason: assessment.reason,
+            }));
 
     if (
       safeExercises.length === 0
@@ -307,9 +331,18 @@ export class TrainingPlansService {
         },
       );
 
-    return this.findById(
-      plan.id,
-    );
+    const savedPlan =
+      await this.findById(plan.id);
+
+    return {
+      ...savedPlan,
+      painRiskSummary: {
+        painAreas,
+        blockedCount:
+          blockedExercises.length,
+        blockedExercises,
+      },
+    };
   }
 
   async findById(planId: number) {
