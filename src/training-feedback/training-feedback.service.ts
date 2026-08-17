@@ -7,6 +7,79 @@ export class TrainingFeedbackService {
     private readonly prisma: PrismaService,
   ) {}
 
+  private checkExercisePainRisk(
+    exerciseName: string,
+    painAreas: string[],
+  ) {
+    const rules = [
+      {
+        keywords: [
+          '肩',
+          '胸',
+          '推',
+        ],
+        painKeywords: [
+          '肩',
+        ],
+      },
+      {
+        keywords: [
+          '腰',
+          '下背',
+          '硬拉',
+          '划船',
+        ],
+        painKeywords: [
+          '腰',
+          '下背',
+        ],
+      },
+      {
+        keywords: [
+          '腿',
+          '深蹲',
+          '蹬',
+        ],
+        painKeywords: [
+          '膝',
+        ],
+      },
+    ];
+
+    for (const rule of rules) {
+      const exerciseMatch =
+        rule.keywords.some(
+          (keyword) =>
+            exerciseName.includes(keyword),
+        );
+
+      const painMatch =
+        rule.painKeywords.some(
+          (keyword) =>
+            painAreas.some((area) =>
+              area.includes(keyword),
+            ),
+        );
+
+      if (exerciseMatch && painMatch) {
+        return {
+          risk: 'HIGH',
+          blocked: true,
+          reason:
+            '动作涉及当前疼痛区域，不建议增加负荷',
+        };
+      }
+    }
+
+    return {
+      risk: 'LOW',
+      blocked: false,
+      reason:
+        '未检测到明显动作风险',
+    };
+  }
+
+
   async getAdjustmentDetail(
     sessionId: number,
   ) {
@@ -74,6 +147,21 @@ export class TrainingFeedbackService {
         },
       });
 
+    const bodyState =
+      await this.prisma.dailyBodyState.findFirst({
+        where: {
+          userId: session.userId,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+    const painAreas =
+      bodyState?.painAreasJson
+        ? JSON.parse(bodyState.painAreasJson)
+        : [];
+
     return {
       sessionId,
       recommendations:
@@ -92,6 +180,12 @@ export class TrainingFeedbackService {
                   100,
               );
 
+            const painRisk =
+              this.checkExercisePainRisk(
+                item.exercise,
+                painAreas,
+              );
+
             let action = currentWeightKg
               ? 'KEEP'
               : 'NO_WEIGHT_DATA';
@@ -103,7 +197,6 @@ export class TrainingFeedbackService {
               : '当前动作没有重量记录，无法自动调整';
 
             if (
-              feedback?.painLevel !== null &&
               feedback?.painLevel !== null &&
               feedback?.painLevel !== undefined &&
               feedback.painLevel >= 3
@@ -130,11 +223,18 @@ export class TrainingFeedbackService {
                 '完成目标且训练难度较低，建议增加重量';
             }
 
+            if (painRisk.blocked) {
+              action = 'BLOCK';
+              suggestedWeightKg = null;
+              reason = painRisk.reason;
+            }
+
             return {
               exercise: item.exercise,
               completionRate,
               currentWeightKg,
               suggestedWeightKg,
+              risk: painRisk.risk,
               action,
               reason,
             };
