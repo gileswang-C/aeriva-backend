@@ -10,9 +10,10 @@ import { TrainingPlansModule } from './training-plans/training-plans.module';
 import { TrainingSessionsModule } from './training-sessions/training-sessions.module';
 import { TrainingFeedbackModule } from './training-feedback/training-feedback.module';
 import { BodyStateModule } from './body-state/body-state.module';
+import { PainRiskModule } from './pain-risk/pain-risk.module';
 
 @Module({
-  imports: [EquipmentModule, UserEquipmentModule, PrismaModule, ExercisesModule, TrainingPlansModule, TrainingSessionsModule, TrainingFeedbackModule, BodyStateModule],
+  imports: [EquipmentModule, UserEquipmentModule, PrismaModule, ExercisesModule, TrainingPlansModule, TrainingSessionsModule, TrainingFeedbackModule, BodyStateModule, PainRiskModule],
   controllers: [AppController, HealthController],
   providers: [AppService],
 })

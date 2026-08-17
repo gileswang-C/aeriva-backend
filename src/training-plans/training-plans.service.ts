@@ -5,6 +5,7 @@ import {
 import { ExercisesService } from '../exercises/exercises.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { BodyStateService } from '../body-state/body-state.service';
+import { PainRiskService } from '../pain-risk/pain-risk.service';
 
 @Injectable()
 export class TrainingPlansService {
@@ -12,6 +13,7 @@ export class TrainingPlansService {
     private readonly prisma: PrismaService,
     private readonly exercisesService: ExercisesService,
     private readonly bodyStateService: BodyStateService,
+    private readonly painRiskService: PainRiskService,
   ) {}
 
   async generate(
@@ -171,74 +173,6 @@ export class TrainingPlansService {
     };
   }
 
-  private checkExercisePainRisk(
-    exerciseName: string,
-    painAreas: string[],
-  ) {
-    const rules = [
-      {
-        keywords: [
-          '肩',
-          '胸',
-          '推',
-        ],
-        painKeywords: [
-          '肩',
-        ],
-      },
-      {
-        keywords: [
-          '腰',
-          '下背',
-          '硬拉',
-          '划船',
-        ],
-        painKeywords: [
-          '腰',
-          '下背',
-        ],
-      },
-      {
-        keywords: [
-          '腿',
-          '深蹲',
-          '蹬',
-        ],
-        painKeywords: [
-          '膝',
-        ],
-      },
-    ];
-
-    for (const rule of rules) {
-      const exerciseMatch =
-        rule.keywords.some(
-          (keyword) =>
-            exerciseName.includes(keyword),
-        );
-
-      const painMatch =
-        rule.painKeywords.some(
-          (keyword) =>
-            painAreas.some((area) =>
-              area.includes(keyword),
-            ),
-        );
-
-      if (exerciseMatch && painMatch) {
-        return {
-          risk: 'HIGH',
-          blocked: true,
-        };
-      }
-    }
-
-    return {
-      risk: 'LOW',
-      blocked: false,
-    };
-  }
-
 
   private async createPlan(
     userId: string,
@@ -279,7 +213,7 @@ export class TrainingPlansService {
         ? availableExercises
         : availableExercises.filter(
             (exercise) =>
-              !this.checkExercisePainRisk(
+              !this.painRiskService.checkExercisePainRisk(
                 exercise.name,
                 painAreas,
               ).blocked,
