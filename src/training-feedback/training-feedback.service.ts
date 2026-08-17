@@ -67,30 +67,78 @@ export class TrainingFeedbackService {
       }
     }
 
+    const feedback =
+      await this.prisma.trainingPerformanceFeedback.findUnique({
+        where: {
+          sessionId,
+        },
+      });
+
     return {
       sessionId,
       recommendations:
         Object.values(recommendations).map(
-          (item: any) => ({
-            exercise: item.exercise,
-            completionRate:
+          (item: any) => {
+            const currentWeightKg =
+              item.weights.length
+                ? item.weights[item.weights.length - 1]
+                : null;
+
+            const completionRate =
               Math.round(
                 (item.completedReps /
                   (item.targetSets *
                     item.targetReps)) *
                   100,
-              ),
-            currentWeightKg:
-              item.weights.length
-                ? item.weights[
-                    item.weights.length - 1
-                  ]
-                : null,
-            action:
-              item.weights.length
-                ? 'KEEP'
-                : 'NO_WEIGHT_DATA',
-          }),
+              );
+
+            let action = currentWeightKg
+              ? 'KEEP'
+              : 'NO_WEIGHT_DATA';
+
+            let suggestedWeightKg = currentWeightKg;
+
+            let reason = currentWeightKg
+              ? '完成当前训练记录，保持当前重量'
+              : '当前动作没有重量记录，无法自动调整';
+
+            if (
+              feedback?.painLevel !== null &&
+              feedback?.painLevel !== null &&
+              feedback?.painLevel !== undefined &&
+              feedback.painLevel >= 3
+            ) {
+              action = 'REDUCE_WEIGHT';
+              suggestedWeightKg =
+                currentWeightKg
+                  ? currentWeightKg - 2.5
+                  : null;
+              reason =
+                '检测到疼痛反馈，降低训练重量';
+            } else if (
+              feedback?.difficultyLevel !== null &&
+              feedback?.difficultyLevel !== null &&
+              feedback?.difficultyLevel !== undefined &&
+              feedback.difficultyLevel <= 2 &&
+              completionRate >= 100 &&
+              currentWeightKg
+            ) {
+              action = 'INCREASE_WEIGHT';
+              suggestedWeightKg =
+                currentWeightKg + 2.5;
+              reason =
+                '完成目标且训练难度较低，建议增加重量';
+            }
+
+            return {
+              exercise: item.exercise,
+              completionRate,
+              currentWeightKg,
+              suggestedWeightKg,
+              action,
+              reason,
+            };
+          },
         ),
     };
   }
@@ -164,6 +212,24 @@ export class TrainingFeedbackService {
       action: 'KEEP',
       reason: '当前训练状态稳定，保持当前计划',
     };
+  }
+
+
+  async updateFeedback(
+    sessionId: number,
+    data: {
+      difficultyLevel?: number;
+      fatigueLevel?: number;
+      painLevel?: number;
+      note?: string;
+    },
+  ) {
+    return this.prisma.trainingPerformanceFeedback.update({
+      where: {
+        sessionId,
+      },
+      data,
+    });
   }
 
 

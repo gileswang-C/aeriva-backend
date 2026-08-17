@@ -5,6 +5,7 @@ import {
   ParseIntPipe,
   Post,
   Get,
+  Put,
 } from '@nestjs/common';
 import { TrainingFeedbackService } from './training-feedback.service';
 
@@ -44,6 +45,22 @@ export class TrainingFeedbackController {
       data:
         await this.trainingFeedbackService.getAdjustment(
           sessionId,
+        ),
+    };
+  }
+
+
+  @Put(':sessionId')
+  async updateFeedback(
+    @Param('sessionId', ParseIntPipe) sessionId: number,
+    @Body() body: any,
+  ) {
+    return {
+      status: 'ok',
+      data:
+        await this.trainingFeedbackService.updateFeedback(
+          sessionId,
+          body,
         ),
     };
   }
