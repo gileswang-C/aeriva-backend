@@ -21,6 +21,20 @@ export class TrainingFeedbackController {
     private readonly trainingFeedbackService: TrainingFeedbackService,
   ) {}
 
+  @Get(':sessionId/adjustment-detail')
+  async getAdjustmentDetail(
+    @Param('sessionId', ParseIntPipe) sessionId: number,
+  ) {
+    return {
+      status: 'ok',
+      data:
+        await this.trainingFeedbackService.getAdjustmentDetail(
+          sessionId,
+        ),
+    };
+  }
+
+
   @Get(':sessionId/adjustment')
   async getAdjustment(
     @Param('sessionId', ParseIntPipe) sessionId: number,

@@ -7,6 +7,95 @@ export class TrainingFeedbackService {
     private readonly prisma: PrismaService,
   ) {}
 
+  async getAdjustmentDetail(
+    sessionId: number,
+  ) {
+    const session =
+      await this.prisma.trainingSession.findUnique({
+        where: {
+          id: sessionId,
+        },
+        include: {
+          sets: {
+            include: {
+              planExercise: {
+                include: {
+                  exercise: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+    if (!session) {
+      throw new Error(
+        'Training session not found',
+      );
+    }
+
+    const recommendations =
+      {};
+
+    for (const set of session.sets) {
+      const exerciseId =
+        set.planExercise.exerciseId;
+
+      if (!recommendations[exerciseId]) {
+        recommendations[exerciseId] = {
+          exercise:
+            set.planExercise.exercise.name,
+          targetSets:
+            set.planExercise.sets,
+          targetReps:
+            set.planExercise.reps,
+          completedReps: 0,
+          totalSets: 0,
+          weights: [],
+        };
+      }
+
+      recommendations[exerciseId].totalSets += 1;
+
+      recommendations[exerciseId].completedReps +=
+        set.reps ?? 0;
+
+      if (set.weightKg !== null) {
+        recommendations[exerciseId].weights.push(
+          set.weightKg,
+        );
+      }
+    }
+
+    return {
+      sessionId,
+      recommendations:
+        Object.values(recommendations).map(
+          (item: any) => ({
+            exercise: item.exercise,
+            completionRate:
+              Math.round(
+                (item.completedReps /
+                  (item.targetSets *
+                    item.targetReps)) *
+                  100,
+              ),
+            currentWeightKg:
+              item.weights.length
+                ? item.weights[
+                    item.weights.length - 1
+                  ]
+                : null,
+            action:
+              item.weights.length
+                ? 'KEEP'
+                : 'NO_WEIGHT_DATA',
+          }),
+        ),
+    };
+  }
+
+
   async getAdjustment(
     sessionId: number,
   ) {
