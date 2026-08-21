@@ -259,7 +259,7 @@ export class TrainingPlansService {
             index,
           ) => {
             const suggestedWeightKg =
-              await this.getSuggestedWeight(
+              await this.getAdaptiveSuggestedWeight(
                 userId,
                 exercise.id,
               );
@@ -523,5 +523,37 @@ export class TrainingPlansService {
     }
 
     return latest.currentWeightKg;
+  }
+
+  private async getAdaptiveSuggestedWeight(
+    userId: string,
+    exerciseId: number,
+  ): Promise<number | null> {
+
+    const adjustment =
+      await this.prisma.trainingAdjustment.findFirst({
+        where: {
+          userId,
+          exerciseId,
+          suggestedWeightKg: {
+            not: null,
+          },
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+    if (
+      adjustment &&
+      adjustment.suggestedWeightKg !== null
+    ) {
+      return adjustment.suggestedWeightKg;
+    }
+
+    return this.getSuggestedWeight(
+      userId,
+      exerciseId,
+    );
   }
 }
