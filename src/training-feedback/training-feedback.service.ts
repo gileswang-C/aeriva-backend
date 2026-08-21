@@ -356,11 +356,17 @@ export class TrainingFeedbackService {
       );
 
 
-    await this.prisma.trainingAdjustment.deleteMany({
-      where: {
-        sessionId,
-      },
-    });
+    const deleted =
+  await this.prisma.trainingAdjustment.deleteMany({
+    where: {
+      sessionId,
+    },
+  });
+
+console.log(
+  'Deleted old adjustments:',
+  deleted.count,
+);
 
 
     for (const item of adjustment.recommendations) {
