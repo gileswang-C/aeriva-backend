@@ -46,6 +46,7 @@ export class TrainingFeedbackService {
 
       if (!recommendations[exerciseId]) {
         recommendations[exerciseId] = {
+          exerciseId,
           exercise:
             set.planExercise.exercise.name,
           targetSets:
@@ -92,9 +93,7 @@ export class TrainingFeedbackService {
         ? JSON.parse(bodyState.painAreasJson)
         : [];
 
-    return {
-      sessionId,
-      recommendations:
+   const adjustmentRecommendations =
         Object.values(recommendations).map(
           (item: any) => {
             const currentWeightKg =
@@ -140,7 +139,6 @@ export class TrainingFeedbackService {
                 '检测到疼痛反馈，降低训练重量';
             } else if (
               feedback?.difficultyLevel !== null &&
-              feedback?.difficultyLevel !== null &&
               feedback?.difficultyLevel !== undefined &&
               feedback.difficultyLevel <= 2 &&
               completionRate >= 100 &&
@@ -160,6 +158,7 @@ export class TrainingFeedbackService {
             }
 
             return {
+              exerciseId: item.exerciseId,
               exercise: item.exercise,
               completionRate,
               currentWeightKg,
@@ -169,7 +168,31 @@ export class TrainingFeedbackService {
               reason,
             };
           },
+        );
+
+    await this.prisma.trainingAdjustment.createMany({
+      data:
+        adjustmentRecommendations.map(
+          (item: any) => ({
+            userId:
+              session.userId,
+            sessionId,
+            exerciseId:
+              item.exerciseId,
+            action:
+              item.action,
+            suggestedWeightKg:
+              item.suggestedWeightKg,
+            reason:
+              item.reason,
+          }),
         ),
+    });
+
+    return {
+      sessionId,
+      recommendations:
+        adjustmentRecommendations,
     };
   }
 
@@ -274,7 +297,7 @@ export class TrainingFeedbackService {
   }
 
 
-  async createFeedback(
+      async createFeedback(
     sessionId: number,
     input: {
       difficultyLevel?: number;
@@ -296,19 +319,76 @@ export class TrainingFeedbackService {
       );
     }
 
-    return this.prisma.trainingPerformanceFeedback.create({
-      data: {
+    const feedback =
+      await this.prisma.trainingPerformanceFeedback.upsert({
+        where: {
+          sessionId,
+        },
+        update: {
+          difficultyLevel:
+            input.difficultyLevel,
+          fatigueLevel:
+            input.fatigueLevel,
+          painLevel:
+            input.painLevel,
+          note:
+            input.note,
+        },
+        create: {
+          sessionId,
+          userId:
+            session.userId,
+          difficultyLevel:
+            input.difficultyLevel,
+          fatigueLevel:
+            input.fatigueLevel,
+          painLevel:
+            input.painLevel,
+          note:
+            input.note,
+        },
+      });
+
+
+    const adjustment =
+      await this.getAdjustmentDetail(
         sessionId,
-        userId: session.userId,
-        difficultyLevel:
-          input.difficultyLevel,
-        fatigueLevel:
-          input.fatigueLevel,
-        painLevel:
-          input.painLevel,
-        note:
-          input.note,
+      );
+
+
+    await this.prisma.trainingAdjustment.deleteMany({
+      where: {
+        sessionId,
       },
     });
+
+
+    for (const item of adjustment.recommendations) {
+
+      await this.prisma.trainingAdjustment.create({
+        data: {
+          userId:
+            session.userId,
+
+          sessionId,
+
+          exerciseId:
+            item.exerciseId,
+
+          action:
+            item.action,
+
+          suggestedWeightKg:
+            item.suggestedWeightKg,
+
+          reason:
+            item.reason,
+        },
+      });
+
+    }
+
+
+    return feedback;
   }
 }

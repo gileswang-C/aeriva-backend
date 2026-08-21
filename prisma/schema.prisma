@@ -48,6 +48,7 @@ model Exercise {
 
   equipment             Equipment?             @relation(fields: [equipmentId], references: [id])
   trainingPlanExercises TrainingPlanExercise[]
+  trainingAdjustments   TrainingAdjustment[]
 
   @@index([equipmentId])
 }
@@ -61,8 +62,9 @@ model TrainingPlan {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  exercises TrainingPlanExercise[]
-  sessions  TrainingSession[]
+  exercises   TrainingPlanExercise[]
+  sessions    TrainingSession[]
+  adjustments TrainingAdjustment[]
 
   @@index([userId])
 }
@@ -97,9 +99,10 @@ model TrainingSession {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  plan     TrainingPlan                 @relation(fields: [planId], references: [id], onDelete: Cascade)
-  sets     TrainingSetLog[]
-  feedback TrainingPerformanceFeedback?
+  plan                TrainingPlan                 @relation(fields: [planId], references: [id], onDelete: Cascade)
+  sets                TrainingSetLog[]
+  feedback            TrainingPerformanceFeedback?
+  trainingAdjustments TrainingAdjustment[]
 
   @@index([userId])
   @@index([planId])
@@ -142,6 +145,25 @@ model DailyBodyState {
   @@unique([userId, localDate])
   @@index([userId])
   @@index([localDate])
+}
+
+model TrainingAdjustment {
+  id                Int      @id @default(autoincrement())
+  userId            String
+  sessionId         Int
+  exerciseId        Int
+  action            String
+  suggestedWeightKg Float?
+  reason            String?
+  createdAt         DateTime @default(now())
+
+  session        TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  exercise       Exercise        @relation(fields: [exerciseId], references: [id])
+  trainingPlan   TrainingPlan?   @relation(fields: [trainingPlanId], references: [id])
+  trainingPlanId Int?
+
+  @@index([userId])
+  @@index([exerciseId])
 }
 
 model TrainingPerformanceFeedback {
