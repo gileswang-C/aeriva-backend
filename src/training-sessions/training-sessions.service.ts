@@ -269,6 +269,9 @@ export class TrainingSessionsService {
             where: {
               completed: true,
             },
+            include: {
+              planExercise: true,
+            },
           },
         },
       });
@@ -285,14 +288,20 @@ export class TrainingSessionsService {
       );
     }
 
-    const expectedSetCount = session.plan.exercises.reduce(
-      (total, exercise) => total + exercise.sets,
-      0,
-    );
+    const expectedSetCount =
+      session.plan.exercises.reduce(
+        (total, exercise) =>
+          total + exercise.sets,
+        0,
+      );
 
-    const completedSetCount = session.sets.length;
+    const completedSetCount =
+      session.sets.length;
 
-    if (completedSetCount < expectedSetCount) {
+    if (
+      completedSetCount <
+      expectedSetCount
+    ) {
       throw new BadRequestException(
         `Training session is incomplete: ${completedSetCount}/${expectedSetCount} sets completed`,
       );
@@ -309,16 +318,180 @@ export class TrainingSessionsService {
         },
       });
 
+    await this.generateAutoAdjustments(
+      sessionId,
+    );
+
     return {
-      sessionId: completedSession.id,
-      userId: completedSession.userId,
-      planId: completedSession.planId,
-      status: completedSession.status,
-      startedAt: completedSession.startedAt,
-      completedAt: completedSession.completedAt,
+      sessionId:
+        completedSession.id,
+      userId:
+        completedSession.userId,
+      planId:
+        completedSession.planId,
+      status:
+        completedSession.status,
+      startedAt:
+        completedSession.startedAt,
+      completedAt:
+        completedSession.completedAt,
       completedSetCount,
       expectedSetCount,
     };
+  }
+
+  private async generateAutoAdjustments(
+    sessionId: number,
+  ) {
+    const session =
+      await this.prisma.trainingSession.findUnique({
+        where: {
+          id: sessionId,
+        },
+        include: {
+          sets: {
+            where: {
+              completed: true,
+            },
+            include: {
+              planExercise: true,
+            },
+            orderBy: {
+              setNumber: 'asc',
+            },
+          },
+        },
+      });
+
+    if (!session) {
+      return;
+    }
+
+    const grouped = new Map<
+      number,
+      {
+        targetSets: number;
+        targetReps: number;
+        completedReps: number;
+        weights: number[];
+      }
+    >();
+
+    for (const set of session.sets) {
+      const exerciseId =
+        set.planExercise.exerciseId;
+
+      if (!grouped.has(exerciseId)) {
+        grouped.set(exerciseId, {
+          targetSets:
+            set.planExercise.sets,
+          targetReps:
+            set.planExercise.reps,
+          completedReps: 0,
+          weights: [],
+        });
+      }
+
+      const item =
+        grouped.get(exerciseId)!;
+
+      item.completedReps +=
+        set.reps ?? 0;
+
+      if (set.weightKg !== null) {
+        item.weights.push(
+          set.weightKg,
+        );
+      }
+    }
+
+    await this.prisma.trainingAdjustment.deleteMany({
+      where: {
+        sessionId,
+      },
+    });
+
+    for (const [
+      exerciseId,
+      item,
+    ] of grouped) {
+      const expectedReps =
+        item.targetSets *
+        item.targetReps;
+
+      const completionRate =
+        expectedReps > 0
+          ? Math.round(
+              (item.completedReps /
+                expectedReps) *
+                100,
+            )
+          : 0;
+
+      const currentWeightKg =
+        item.weights.length > 0
+          ? item.weights[
+              item.weights.length - 1
+            ]
+          : null;
+
+      let action =
+        'NO_WEIGHT_DATA';
+
+      let suggestedWeightKg:
+        number | null = null;
+
+      let reason =
+        '当前动作没有重量记录，暂不自动调整重量';
+
+      if (currentWeightKg !== null) {
+        if (completionRate >= 100) {
+          action =
+            'INCREASE_WEIGHT';
+          suggestedWeightKg =
+            Math.round(
+              (currentWeightKg + 2.5) *
+                10,
+            ) / 10;
+          reason =
+            '完成全部目标次数，自动建议下次增加重量';
+        } else if (
+          completionRate >= 80
+        ) {
+          action =
+            'KEEP';
+          suggestedWeightKg =
+            currentWeightKg;
+          reason =
+            '训练完成度稳定，建议保持当前重量';
+        } else {
+          action =
+            'REDUCE_WEIGHT';
+          suggestedWeightKg =
+            Math.max(
+              0,
+              Math.round(
+                (currentWeightKg - 2.5) *
+                  10,
+              ) / 10,
+            );
+          reason =
+            '目标次数完成度较低，建议下次降低重量';
+        }
+      }
+
+      await this.prisma.trainingAdjustment.create({
+        data: {
+          userId:
+            session.userId,
+          sessionId,
+          exerciseId,
+          action,
+          suggestedWeightKg,
+          reason,
+        },
+      });
+    }
   }
 
   async cancel(sessionId: number) {
