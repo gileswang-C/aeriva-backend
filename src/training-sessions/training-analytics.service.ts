@@ -35,6 +35,11 @@ export class TrainingAnalyticsService {
               setNumber: 'asc',
             },
           },
+          trainingAdjustments: {
+            orderBy: {
+              id: 'asc',
+            },
+          },
         },
       });
 
@@ -176,6 +181,7 @@ export class TrainingAnalyticsService {
       environment: session.plan.environment,
       targetMuscle: session.plan.targetMuscle,
       exerciseAnalysis,
+      adjustments: session.trainingAdjustments,
     };
   }
 
