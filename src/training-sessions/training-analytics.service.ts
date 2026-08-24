@@ -182,6 +182,15 @@ export class TrainingAnalyticsService {
       targetMuscle: session.plan.targetMuscle,
       exerciseAnalysis,
       adjustments: session.trainingAdjustments,
+      aiDecision: session.trainingAdjustments.map(
+        (adjustment) => ({
+          exerciseId: adjustment.exerciseId,
+          action: adjustment.action,
+          nextWeightKg:
+            adjustment.suggestedWeightKg,
+          reason: adjustment.reason,
+        }),
+      ),
     };
   }
 
