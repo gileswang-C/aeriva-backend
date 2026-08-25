@@ -1,4 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PainRiskService } from '../pain-risk/pain-risk.service';
 
@@ -32,7 +35,7 @@ export class TrainingFeedbackService {
       });
 
     if (!session) {
-      throw new Error(
+      throw new NotFoundException(
         'Training session not found',
       );
     }
@@ -314,7 +317,7 @@ export class TrainingFeedbackService {
       });
 
     if (!session) {
-      throw new Error(
+      throw new NotFoundException(
         'Training session not found',
       );
     }
