@@ -5,11 +5,26 @@ import {
   Param,
   Put,
 } from '@nestjs/common';
+import {
+  IsArray,
+  IsInt,
+  IsOptional,
+  IsPositive,
+} from 'class-validator';
 import { UserEquipmentService } from './user-equipment.service';
 
-interface UpdateUserEquipmentBody {
-  homeEquipmentIds: number[];
-  gymEquipmentIds: number[];
+class UpdateUserEquipmentBody {
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  @IsPositive({ each: true })
+  homeEquipmentIds?: number[];
+
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  @IsPositive({ each: true })
+  gymEquipmentIds?: number[];
 }
 
 @Controller('user-equipment')
