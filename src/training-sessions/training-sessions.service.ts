@@ -308,19 +308,27 @@ export class TrainingSessionsService {
     }
 
     const completedSession =
-      await this.prisma.trainingSession.update({
-        where: {
-          id: sessionId,
-        },
-        data: {
-          status: 'COMPLETED',
-          completedAt: new Date(),
-        },
-      });
+      await this.prisma.$transaction(
+        async (tx) => {
+          const updatedSession =
+            await tx.trainingSession.update({
+              where: {
+                id: sessionId,
+              },
+              data: {
+                status: 'COMPLETED',
+                completedAt: new Date(),
+              },
+            });
 
-    await this.generateAutoAdjustments(
-      sessionId,
-    );
+          await this.generateAutoAdjustments(
+            sessionId,
+            tx,
+          );
+
+          return updatedSession;
+        },
+      );
 
     return {
       sessionId:
@@ -342,9 +350,13 @@ export class TrainingSessionsService {
 
   private async generateAutoAdjustments(
     sessionId: number,
+    db: Pick<
+      PrismaService,
+      'trainingSession' | 'trainingAdjustment'
+    > = this.prisma,
   ) {
     const session =
-      await this.prisma.trainingSession.findUnique({
+      await db.trainingSession.findUnique({
         where: {
           id: sessionId,
         },
@@ -405,7 +417,7 @@ export class TrainingSessionsService {
       }
     }
 
-    await this.prisma.trainingAdjustment.deleteMany({
+    await db.trainingAdjustment.deleteMany({
       where: {
         sessionId,
       },
@@ -480,7 +492,7 @@ export class TrainingSessionsService {
         }
       }
 
-      await this.prisma.trainingAdjustment.create({
+      await db.trainingAdjustment.create({
         data: {
           userId:
             session.userId,
