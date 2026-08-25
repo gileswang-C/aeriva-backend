@@ -126,26 +126,26 @@ export class TrainingAnalyticsService {
           loadAction === 'WAIT_FOR_COMPLETION'
         ) {
           recommendation =
-            '训练尚未完成，当前仅展示执行进度与计划重量偏差，暂不进行下一次负荷调整判断。';
+            '训练尚未完成，当前仅展示执行进度与计划重量偏差。';
         } else if (
           loadAction === 'NO_WEIGHT_DATA'
         ) {
           if (completionRatePercent >= 100) {
             recommendation =
-              '目标完成良好。当前没有重量数据，暂不进行负荷调整判断。';
+              '目标完成良好，但当前没有重量数据。';
           } else if (completionRatePercent >= 90) {
             recommendation =
-              '接近计划目标。当前没有重量数据，建议先维持训练目标。';
+              '接近计划目标，但当前没有重量数据。';
           } else {
             recommendation =
-              '完成度低于计划目标。当前没有重量数据，可考虑降低动作难度或目标次数。';
+              '完成度低于计划目标，且当前没有重量数据。';
           }
         } else if (loadAction === 'MAINTAIN') {
           recommendation =
-            `当前实际负荷 ${currentWeightKg}kg 基本匹配训练能力，下次建议结合计划执行情况继续观察。`;
+            `当前实际负荷 ${currentWeightKg}kg 与本次完成表现基本匹配。`;
         } else {
           recommendation =
-            `当前实际负荷 ${currentWeightKg}kg 下完成度偏低，下次可考虑适当降低重量或目标次数。`;
+            `当前实际负荷 ${currentWeightKg}kg 下完成度偏低。`;
         }
 
         return {
