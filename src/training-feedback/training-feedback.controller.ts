@@ -7,12 +7,28 @@ import {
   Get,
   Put,
 } from '@nestjs/common';
+import {
+  IsInt,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { TrainingFeedbackService } from './training-feedback.service';
 
-interface CreateFeedbackBody {
+class CreateFeedbackBody {
+  @IsOptional()
+  @IsInt()
   difficultyLevel?: number;
+
+  @IsOptional()
+  @IsInt()
   fatigueLevel?: number;
+
+  @IsOptional()
+  @IsInt()
   painLevel?: number;
+
+  @IsOptional()
+  @IsString()
   note?: string;
 }
 
@@ -53,7 +69,7 @@ export class TrainingFeedbackController {
   @Put(':sessionId')
   async updateFeedback(
     @Param('sessionId', ParseIntPipe) sessionId: number,
-    @Body() body: any,
+    @Body() body: CreateFeedbackBody,
   ) {
     return {
       status: 'ok',
