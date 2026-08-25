@@ -7,5 +7,6 @@ import { TrainingFeedbackController } from './training-feedback.controller';
   imports: [PainRiskModule],
   controllers: [TrainingFeedbackController],
   providers: [TrainingFeedbackService],
+  exports: [TrainingFeedbackService],
 })
 export class TrainingFeedbackModule {}

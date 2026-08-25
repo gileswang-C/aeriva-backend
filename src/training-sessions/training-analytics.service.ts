@@ -3,10 +3,14 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { TrainingFeedbackService } from '../training-feedback/training-feedback.service';
 
 @Injectable()
 export class TrainingAnalyticsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+  private readonly prisma: PrismaService,
+  private readonly trainingFeedbackService: TrainingFeedbackService,
+) {}
 
   async analyze(sessionId: number) {
     const session =
@@ -40,6 +44,7 @@ export class TrainingAnalyticsService {
               id: 'asc',
             },
           },
+          feedback: true,
         },
       });
 
@@ -173,6 +178,9 @@ export class TrainingAnalyticsService {
         };
       });
 
+    const recoveryAdjustment =
+      await this.trainingFeedbackService.getAdjustment(sessionId);
+
     return {
       sessionId: session.id,
       userId: session.userId,
@@ -182,15 +190,18 @@ export class TrainingAnalyticsService {
       targetMuscle: session.plan.targetMuscle,
       exerciseAnalysis,
       adjustments: session.trainingAdjustments,
-      aiDecision: session.trainingAdjustments.map(
-        (adjustment) => ({
-          exerciseId: adjustment.exerciseId,
-          action: adjustment.action,
-          nextWeightKg:
-            adjustment.suggestedWeightKg,
-          reason: adjustment.reason,
-        }),
-      ),
+      aiDecision: {
+        loadAdjustment: session.trainingAdjustments.map(
+          (adjustment) => ({
+            exerciseId: adjustment.exerciseId,
+            action: adjustment.action,
+            nextWeightKg:
+              adjustment.suggestedWeightKg,
+            reason: adjustment.reason,
+          }),
+        ),
+        recoveryAdjustment,
+      },
     };
   }
 
