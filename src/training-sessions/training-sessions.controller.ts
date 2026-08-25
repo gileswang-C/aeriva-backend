@@ -8,18 +8,42 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import {
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+  Min,
+} from 'class-validator';
 import { TrainingSessionsService } from './training-sessions.service';
 import { TrainingAnalyticsService } from './training-analytics.service';
 
-interface StartTrainingSessionBody {
+class StartTrainingSessionBody {
+  @IsString()
   userId: string;
+
+  @IsInt()
+  @IsPositive()
   planId: number;
 }
 
-interface LogTrainingSetBody {
+class LogTrainingSetBody {
+  @IsInt()
+  @IsPositive()
   exerciseId: number;
+
+  @IsInt()
+  @IsPositive()
   setNumber: number;
+
+  @IsInt()
+  @Min(0)
   reps: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
   weightKg?: number;
 }
 
