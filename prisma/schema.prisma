@@ -162,6 +162,7 @@ model TrainingAdjustment {
   trainingPlan   TrainingPlan?   @relation(fields: [trainingPlanId], references: [id])
   trainingPlanId Int?
 
+  @@unique([sessionId, exerciseId])
   @@index([userId])
   @@index([exerciseId])
 }
