@@ -133,13 +133,21 @@ export class TrainingFeedbackService {
               feedback?.painLevel !== undefined &&
               feedback.painLevel >= 3
             ) {
-              action = 'REDUCE_WEIGHT';
-              suggestedWeightKg =
-                currentWeightKg
-                  ? currentWeightKg - 2.5
-                  : null;
-              reason =
-                '检测到疼痛反馈，降低训练重量';
+              if (currentWeightKg !== null) {
+                action = 'REDUCE_WEIGHT';
+                suggestedWeightKg =
+                  Math.max(
+                    0,
+                    currentWeightKg - 2.5,
+                  );
+                reason =
+                  '检测到疼痛反馈，降低训练重量';
+              } else {
+                action = 'NO_WEIGHT_DATA';
+                suggestedWeightKg = null;
+                reason =
+                  '检测到疼痛反馈，但当前动作没有重量数据，无法自动降低重量';
+              }
             } else if (
               feedback?.difficultyLevel !== null &&
               feedback?.difficultyLevel !== undefined &&
@@ -172,25 +180,6 @@ export class TrainingFeedbackService {
             };
           },
         );
-
-    await this.prisma.trainingAdjustment.createMany({
-      data:
-        adjustmentRecommendations.map(
-          (item: any) => ({
-            userId:
-              session.userId,
-            sessionId,
-            exerciseId:
-              item.exerciseId,
-            action:
-              item.action,
-            suggestedWeightKg:
-              item.suggestedWeightKg,
-            reason:
-              item.reason,
-          }),
-        ),
-    });
 
     return {
       sessionId,
@@ -280,12 +269,10 @@ export class TrainingFeedbackService {
       note?: string;
     },
   ) {
-    return this.prisma.trainingPerformanceFeedback.update({
-      where: {
-        sessionId,
-      },
+    return this.createFeedback(
+      sessionId,
       data,
-    });
+    );
   }
 
 
