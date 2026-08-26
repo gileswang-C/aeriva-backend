@@ -15,9 +15,15 @@ export class TrainingFeedbackService {
 
   async getAdjustmentDetail(
     sessionId: number,
+    db: Pick<
+      PrismaService,
+      | 'trainingSession'
+      | 'trainingPerformanceFeedback'
+      | 'dailyBodyState'
+    > = this.prisma,
   ) {
     const session =
-      await this.prisma.trainingSession.findUnique({
+      await db.trainingSession.findUnique({
         where: {
           id: sessionId,
         },
@@ -75,14 +81,14 @@ export class TrainingFeedbackService {
     }
 
     const feedback =
-      await this.prisma.trainingPerformanceFeedback.findUnique({
+      await db.trainingPerformanceFeedback.findUnique({
         where: {
           sessionId,
         },
       });
 
     const bodyState =
-      await this.prisma.dailyBodyState.findFirst({
+      await db.dailyBodyState.findFirst({
         where: {
           userId: session.userId,
         },
@@ -287,7 +293,7 @@ export class TrainingFeedbackService {
   }
 
 
-      async createFeedback(
+  async createFeedback(
     sessionId: number,
     input: {
       difficultyLevel?: number;
@@ -296,95 +302,87 @@ export class TrainingFeedbackService {
       note?: string;
     },
   ) {
-    const session =
-      await this.prisma.trainingSession.findUnique({
-        where: {
-          id: sessionId,
-        },
-      });
+    return this.prisma.$transaction(
+      async (tx) => {
+        const session =
+          await tx.trainingSession.findUnique({
+            where: {
+              id: sessionId,
+            },
+          });
 
-    if (!session) {
-      throw new NotFoundException(
-        'Training session not found',
-      );
-    }
+        if (!session) {
+          throw new NotFoundException(
+            'Training session not found',
+          );
+        }
 
-    const feedback =
-      await this.prisma.trainingPerformanceFeedback.upsert({
-        where: {
-          sessionId,
-        },
-        update: {
-          difficultyLevel:
-            input.difficultyLevel,
-          fatigueLevel:
-            input.fatigueLevel,
-          painLevel:
-            input.painLevel,
-          note:
-            input.note,
-        },
-        create: {
-          sessionId,
-          userId:
-            session.userId,
-          difficultyLevel:
-            input.difficultyLevel,
-          fatigueLevel:
-            input.fatigueLevel,
-          painLevel:
-            input.painLevel,
-          note:
-            input.note,
-        },
-      });
+        const feedback =
+          await tx.trainingPerformanceFeedback.upsert({
+            where: {
+              sessionId,
+            },
+            update: {
+              difficultyLevel:
+                input.difficultyLevel,
+              fatigueLevel:
+                input.fatigueLevel,
+              painLevel:
+                input.painLevel,
+              note:
+                input.note,
+            },
+            create: {
+              sessionId,
+              userId:
+                session.userId,
+              difficultyLevel:
+                input.difficultyLevel,
+              fatigueLevel:
+                input.fatigueLevel,
+              painLevel:
+                input.painLevel,
+              note:
+                input.note,
+            },
+          });
 
+        const adjustment =
+          await this.getAdjustmentDetail(
+            sessionId,
+            tx,
+          );
 
-    const adjustment =
-      await this.getAdjustmentDetail(
-        sessionId,
-      );
+        await tx.trainingAdjustment.deleteMany({
+          where: {
+            sessionId,
+          },
+        });
 
+        for (
+          const item
+          of adjustment.recommendations
+        ) {
+          await tx.trainingAdjustment.create({
+            data: {
+              userId:
+                session.userId,
+              sessionId,
+              exerciseId:
+                item.exerciseId,
+              action:
+                item.action,
+              suggestedWeightKg:
+                item.suggestedWeightKg,
+              reason:
+                item.reason,
+            },
+          });
+        }
 
-    const deleted =
-  await this.prisma.trainingAdjustment.deleteMany({
-    where: {
-      sessionId,
-    },
-  });
-
-console.log(
-  'Deleted old adjustments:',
-  deleted.count,
-);
-
-
-    for (const item of adjustment.recommendations) {
-
-      await this.prisma.trainingAdjustment.create({
-        data: {
-          userId:
-            session.userId,
-
-          sessionId,
-
-          exerciseId:
-            item.exerciseId,
-
-          action:
-            item.action,
-
-          suggestedWeightKg:
-            item.suggestedWeightKg,
-
-          reason:
-            item.reason,
-        },
-      });
-
-    }
-
-
-    return feedback;
+        return feedback;
+      },
+    );
   }
+
 }
