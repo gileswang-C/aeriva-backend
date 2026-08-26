@@ -1,4 +1,5 @@
 import {
+BadRequestException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -317,7 +318,13 @@ export class TrainingFeedbackService {
           );
         }
 
-        const feedback =
+        if (session.status !== 'COMPLETED') {
+      throw new BadRequestException(
+        'Training feedback can only be submitted for a completed session',
+      );
+    }
+
+    const feedback =
           await tx.trainingPerformanceFeedback.upsert({
             where: {
               sessionId,
