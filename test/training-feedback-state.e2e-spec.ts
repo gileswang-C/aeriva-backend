@@ -1,4 +1,7 @@
-import { INestApplication } from '@nestjs/common';
+import {
+  INestApplication,
+  ValidationPipe,
+} from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
@@ -14,6 +17,14 @@ describe('Training Feedback State (e2e)', () => {
       }).compile();
 
     app = moduleFixture.createNestApplication();
+
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        transform: true,
+      }),
+    );
+
     await app.init();
   });
 
@@ -175,6 +186,45 @@ describe('Training Feedback State (e2e)', () => {
       response.body.message,
     ).toBe(
       'Training feedback can only be submitted for a completed session',
+    );
+  });
+
+  it('rejects feedback levels outside the 1-5 range', async () => {
+    const userId =
+      'e2e-feedback-validation';
+
+    const plan =
+      await preparePlan(userId);
+
+    const sessionId =
+      await startSession(
+        userId,
+        plan.planId,
+      );
+
+    await completeSession(sessionId);
+
+    const response =
+      await request(app.getHttpServer())
+        .put(
+          `/training-feedback/${sessionId}`,
+        )
+        .send({
+          difficultyLevel: 999,
+          fatigueLevel: -10,
+          painLevel: 999,
+          note: 'invalid feedback range',
+        })
+        .expect(400);
+
+    expect(
+      response.body.message,
+    ).toEqual(
+      expect.arrayContaining([
+        'difficultyLevel must not be greater than 5',
+        'fatigueLevel must not be less than 1',
+        'painLevel must not be greater than 5',
+      ]),
     );
   });
 

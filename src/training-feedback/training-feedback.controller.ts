@@ -11,20 +11,28 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Max,
+  Min,
 } from 'class-validator';
 import { TrainingFeedbackService } from './training-feedback.service';
 
 class CreateFeedbackBody {
   @IsOptional()
   @IsInt()
+  @Min(1)
+  @Max(5)
   difficultyLevel?: number;
 
   @IsOptional()
   @IsInt()
+  @Min(1)
+  @Max(5)
   fatigueLevel?: number;
 
   @IsOptional()
   @IsInt()
+  @Min(1)
+  @Max(5)
   painLevel?: number;
 
   @IsOptional()
