@@ -169,6 +169,26 @@ describe('Adaptive Adjustment Recency (e2e)', () => {
       })
       .expect(200);
 
+    const latestAdjustmentResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/training-adjustments/latest/${userId}`,
+        )
+        .expect(200);
+
+    expect(
+      latestAdjustmentResponse.body.data.sessionId,
+    ).toBe(secondSessionId);
+
+    expect(
+      latestAdjustmentResponse.body.data.adjustments,
+    ).toHaveLength(1);
+
+    expect(
+      latestAdjustmentResponse.body.data.adjustments[0]
+        .suggestedWeightKg,
+    ).toBe(40);
+
     const thirdPlan =
       await generatePlan();
 

@@ -15,9 +15,16 @@ export class TrainingAdjustmentsService {
         where: {
           userId,
         },
-        orderBy: {
-          createdAt: 'desc',
-        },
+        orderBy: [
+          {
+            session: {
+              completedAt: 'desc',
+            },
+          },
+          {
+            sessionId: 'desc',
+          },
+        ],
       });
 
     if (!latest) {
