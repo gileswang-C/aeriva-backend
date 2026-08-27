@@ -1,23 +1,33 @@
 import {
   BadRequestException,
   Injectable,
+  NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+
+export interface MealItemInput {
+  foodName: string;
+  caloriesKcal: number;
+  proteinG?: number;
+  carbsG?: number;
+  fatG?: number;
+  quantity?: number;
+  unit?: string;
+}
 
 export interface CreateMealInput {
   userId: string;
   mealType: string;
   source?: string;
   note?: string;
-  items: {
-    foodName: string;
-    caloriesKcal: number;
-    proteinG?: number;
-    carbsG?: number;
-    fatG?: number;
-    quantity?: number;
-    unit?: string;
-  }[];
+  items: MealItemInput[];
+}
+
+export interface UpdateMealInput {
+  mealType?: string;
+  source?: string;
+  note?: string | null;
+  items?: MealItemInput[];
 }
 
 @Injectable()
@@ -77,6 +87,140 @@ export class NutritionService {
       });
 
     return this.mapMeal(meal);
+  }
+
+  async updateMeal(
+    mealLogId: number,
+    input: UpdateMealInput,
+  ) {
+    if (
+      input.mealType === undefined &&
+      input.source === undefined &&
+      input.note === undefined &&
+      input.items === undefined
+    ) {
+      throw new BadRequestException(
+        'At least one field is required',
+      );
+    }
+
+    if (
+      input.items !== undefined &&
+      input.items.length === 0
+    ) {
+      throw new BadRequestException(
+        'items must contain at least one item',
+      );
+    }
+
+    return this.prisma.$transaction(
+      async (tx) => {
+        const existing =
+          await tx.mealLog.findUnique({
+            where: {
+              id: mealLogId,
+            },
+          });
+
+        if (!existing) {
+          throw new NotFoundException(
+            'Meal not found',
+          );
+        }
+
+        if (input.items !== undefined) {
+          await tx.mealItem.deleteMany({
+            where: {
+              mealLogId,
+            },
+          });
+
+          await tx.mealItem.createMany({
+            data:
+              input.items.map(
+                (item) => ({
+                  mealLogId,
+                  foodName:
+                    item.foodName,
+                  caloriesKcal:
+                    item.caloriesKcal,
+                  proteinG:
+                    item.proteinG,
+                  carbsG:
+                    item.carbsG,
+                  fatG:
+                    item.fatG,
+                  quantity:
+                    item.quantity,
+                  unit:
+                    item.unit,
+                }),
+              ),
+          });
+        }
+
+        const updated =
+          await tx.mealLog.update({
+            where: {
+              id: mealLogId,
+            },
+            data: {
+              mealType:
+                input.mealType ??
+                existing.mealType,
+              source:
+                input.source ??
+                existing.source,
+              note:
+                input.note === undefined
+                  ? existing.note
+                  : input.note,
+            },
+            include: {
+              items: {
+                orderBy: {
+                  id: 'asc',
+                },
+              },
+            },
+          });
+
+        return this.mapMeal(
+          updated,
+        );
+      },
+    );
+  }
+
+  async deleteMeal(
+    mealLogId: number,
+  ) {
+    const existing =
+      await this.prisma.mealLog.findUnique({
+        where: {
+          id: mealLogId,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+    if (!existing) {
+      throw new NotFoundException(
+        'Meal not found',
+      );
+    }
+
+    await this.prisma.mealLog.delete({
+      where: {
+        id: mealLogId,
+      },
+    });
+
+    return {
+      mealLogId,
+      deleted: true,
+    };
   }
 
   async getToday(
@@ -231,8 +375,10 @@ export class NutritionService {
     },
   ) {
     return {
-      mealLogId: meal.id,
-      userId: meal.userId,
+      mealLogId:
+        meal.id,
+      userId:
+        meal.userId,
       localDate:
         meal.localDate,
       utcOffsetMinutes:

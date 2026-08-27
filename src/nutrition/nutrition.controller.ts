@@ -2,9 +2,12 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
+  ParseIntPipe,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
 import {
@@ -21,7 +24,7 @@ import {
 import { Type } from 'class-transformer';
 import { NutritionService } from './nutrition.service';
 
-class CreateMealItemBody {
+class MealItemBody {
   @IsString()
   @IsNotEmpty()
   foodName!: string;
@@ -87,10 +90,42 @@ class CreateMealBody {
   @ValidateNested({
     each: true,
   })
-  @Type(() =>
-    CreateMealItemBody
-  )
-  items!: CreateMealItemBody[];
+  @Type(() => MealItemBody)
+  items!: MealItemBody[];
+}
+
+class UpdateMealBody {
+  @IsOptional()
+  @IsString()
+  @IsIn([
+    'BREAKFAST',
+    'LUNCH',
+    'DINNER',
+    'SNACK',
+    'LATE_NIGHT',
+  ])
+  mealType?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn([
+    'MANUAL',
+    'PHOTO_AI',
+  ])
+  source?: string;
+
+  @IsOptional()
+  @IsString()
+  note?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({
+    each: true,
+  })
+  @Type(() => MealItemBody)
+  items?: MealItemBody[];
 }
 
 @Controller('nutrition')
@@ -118,6 +153,43 @@ export class NutritionController {
         await this.nutritionService.createMeal(
           body,
           parsedUtcOffsetMinutes,
+        ),
+    };
+  }
+
+  @Put('meals/:mealLogId')
+  async updateMeal(
+    @Param(
+      'mealLogId',
+      ParseIntPipe,
+    )
+    mealLogId: number,
+    @Body()
+    body: UpdateMealBody,
+  ) {
+    return {
+      status: 'ok',
+      data:
+        await this.nutritionService.updateMeal(
+          mealLogId,
+          body,
+        ),
+    };
+  }
+
+  @Delete('meals/:mealLogId')
+  async deleteMeal(
+    @Param(
+      'mealLogId',
+      ParseIntPipe,
+    )
+    mealLogId: number,
+  ) {
+    return {
+      status: 'ok',
+      data:
+        await this.nutritionService.deleteMeal(
+          mealLogId,
         ),
     };
   }
