@@ -187,3 +187,39 @@ model TrainingPerformanceFeedback {
   @@index([userId])
   @@index([sessionId])
 }
+
+model MealLog {
+  id               Int      @id @default(autoincrement())
+  userId           String
+  localDate        String
+  utcOffsetMinutes Int      @default(480)
+  mealType         String
+  source           String   @default("MANUAL")
+  note             String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  items MealItem[]
+
+  @@index([userId])
+  @@index([localDate])
+  @@index([userId, localDate])
+}
+
+model MealItem {
+  id           Int      @id @default(autoincrement())
+  mealLogId    Int
+  foodName     String
+  caloriesKcal Float
+  proteinG     Float?
+  carbsG       Float?
+  fatG         Float?
+  quantity     Float?
+  unit         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  mealLog MealLog @relation(fields: [mealLogId], references: [id], onDelete: Cascade)
+
+  @@index([mealLogId])
+}
