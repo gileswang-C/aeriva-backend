@@ -539,9 +539,16 @@ export class TrainingPlansService {
             not: null,
           },
         },
-        orderBy: {
-          createdAt: 'desc',
-        },
+        orderBy: [
+          {
+            session: {
+              completedAt: 'desc',
+            },
+          },
+          {
+            sessionId: 'desc',
+          },
+        ],
       });
 
     if (
