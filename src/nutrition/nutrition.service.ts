@@ -329,6 +329,249 @@ export class NutritionService {
     };
   }
 
+  async getRangeSummary(
+    userId: string,
+    startDate: string,
+    endDate: string,
+  ) {
+    if (!userId?.trim()) {
+      throw new BadRequestException(
+        'userId is required',
+      );
+    }
+
+    this.validateLocalDate(
+      startDate,
+    );
+
+    this.validateLocalDate(
+      endDate,
+    );
+
+    if (startDate > endDate) {
+      throw new BadRequestException(
+        'startDate must not be after endDate',
+      );
+    }
+
+    const start =
+      new Date(
+        `${startDate}T00:00:00.000Z`,
+      );
+
+    const end =
+      new Date(
+        `${endDate}T00:00:00.000Z`,
+      );
+
+    const dayCount =
+      Math.floor(
+        (
+          end.getTime() -
+          start.getTime()
+        ) /
+          (
+            24 *
+            60 *
+            60 *
+            1000
+          ),
+      ) + 1;
+
+    if (dayCount > 366) {
+      throw new BadRequestException(
+        'Date range must not exceed 366 days',
+      );
+    }
+
+    const meals =
+      await this.prisma.mealLog.findMany({
+        where: {
+          userId,
+          localDate: {
+            gte: startDate,
+            lte: endDate,
+          },
+        },
+        include: {
+          items: {
+            orderBy: {
+              id: 'asc',
+            },
+          },
+        },
+        orderBy: [
+          {
+            localDate: 'asc',
+          },
+          {
+            createdAt: 'asc',
+          },
+        ],
+      });
+
+    const dailyMap =
+      new Map<
+        string,
+        {
+          mealCount: number;
+          itemCount: number;
+          totalCaloriesKcal: number;
+          totalProteinG: number;
+          totalCarbsG: number;
+          totalFatG: number;
+        }
+      >();
+
+    let mealCount = 0;
+    let itemCount = 0;
+    let totalCaloriesKcal = 0;
+    let totalProteinG = 0;
+    let totalCarbsG = 0;
+    let totalFatG = 0;
+
+    for (const meal of meals) {
+      mealCount += 1;
+
+      let daily =
+        dailyMap.get(
+          meal.localDate,
+        );
+
+      if (!daily) {
+        daily = {
+          mealCount: 0,
+          itemCount: 0,
+          totalCaloriesKcal: 0,
+          totalProteinG: 0,
+          totalCarbsG: 0,
+          totalFatG: 0,
+        };
+
+        dailyMap.set(
+          meal.localDate,
+          daily,
+        );
+      }
+
+      daily.mealCount += 1;
+
+      for (const item of meal.items) {
+        itemCount += 1;
+        daily.itemCount += 1;
+
+        totalCaloriesKcal +=
+          item.caloriesKcal;
+
+        totalProteinG +=
+          item.proteinG ?? 0;
+
+        totalCarbsG +=
+          item.carbsG ?? 0;
+
+        totalFatG +=
+          item.fatG ?? 0;
+
+        daily.totalCaloriesKcal +=
+          item.caloriesKcal;
+
+        daily.totalProteinG +=
+          item.proteinG ?? 0;
+
+        daily.totalCarbsG +=
+          item.carbsG ?? 0;
+
+        daily.totalFatG +=
+          item.fatG ?? 0;
+      }
+    }
+
+    const round1 = (
+      value: number,
+    ) =>
+      Math.round(value * 10) / 10;
+
+    const dailySummaries =
+      Array.from(
+        dailyMap.entries(),
+      ).map(
+        ([
+          localDate,
+          daily,
+        ]) => ({
+          localDate,
+          mealCount:
+            daily.mealCount,
+          itemCount:
+            daily.itemCount,
+          totalCaloriesKcal:
+            round1(
+              daily.totalCaloriesKcal,
+            ),
+          totalProteinG:
+            round1(
+              daily.totalProteinG,
+            ),
+          totalCarbsG:
+            round1(
+              daily.totalCarbsG,
+            ),
+          totalFatG:
+            round1(
+              daily.totalFatG,
+            ),
+        }),
+      );
+
+    return {
+      userId,
+      startDate,
+      endDate,
+      dayCount,
+      daysWithMeals:
+        dailySummaries.length,
+      mealCount,
+      itemCount,
+      totalCaloriesKcal:
+        round1(
+          totalCaloriesKcal,
+        ),
+      totalProteinG:
+        round1(
+          totalProteinG,
+        ),
+      totalCarbsG:
+        round1(
+          totalCarbsG,
+        ),
+      totalFatG:
+        round1(
+          totalFatG,
+        ),
+      averageCaloriesKcalPerDay:
+        round1(
+          totalCaloriesKcal /
+            dayCount,
+        ),
+      averageProteinGPerDay:
+        round1(
+          totalProteinG /
+            dayCount,
+        ),
+      averageCarbsGPerDay:
+        round1(
+          totalCarbsG /
+            dayCount,
+        ),
+      averageFatGPerDay:
+        round1(
+          totalFatG /
+            dayCount,
+        ),
+      dailySummaries,
+    };
+  }
+
   async getToday(
     userId: string,
     utcOffsetMinutes = 480,

@@ -194,6 +194,32 @@ export class NutritionController {
     };
   }
 
+  @Get(':userId/range/summary')
+  async getRangeSummary(
+    @Param('userId')
+    userId: string,
+    @Query('startDate')
+    startDate?: string,
+    @Query('endDate')
+    endDate?: string,
+  ) {
+    if (!startDate || !endDate) {
+      throw new BadRequestException(
+        'startDate and endDate are required',
+      );
+    }
+
+    return {
+      status: 'ok',
+      data:
+        await this.nutritionService.getRangeSummary(
+          userId,
+          startDate,
+          endDate,
+        ),
+    };
+  }
+
   @Get(':userId/date/:localDate/summary')
   async getSummaryByDate(
     @Param('userId')

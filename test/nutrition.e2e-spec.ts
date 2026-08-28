@@ -391,4 +391,152 @@ describe('Nutrition (e2e)', () => {
     ).toBe('localDate is invalid');
   });
 
+  it('returns nutrition summaries for a date range and rejects reversed dates', async () => {
+    const userId =
+      'e2e-nutrition-range-user';
+
+    const createResponse =
+      await request(app.getHttpServer())
+        .post(
+          '/nutrition/meals?utcOffsetMinutes=480',
+        )
+        .send({
+          userId,
+          mealType: 'BREAKFAST',
+          source: 'MANUAL',
+          items: [
+            {
+              foodName: '燕麦',
+              caloriesKcal: 228,
+              proteinG: 8,
+              carbsG: 40,
+              fatG: 4,
+            },
+            {
+              foodName: '牛奶',
+              caloriesKcal: 150,
+              proteinG: 8,
+              carbsG: 12,
+              fatG: 8,
+            },
+          ],
+        })
+        .expect(201);
+
+    const localDate =
+      createResponse.body.data.localDate;
+
+    const currentDate =
+      new Date(
+        `${localDate}T00:00:00.000Z`,
+      );
+
+    const previousDate =
+      new Date(
+        currentDate.getTime() -
+          24 * 60 * 60 * 1000,
+      )
+        .toISOString()
+        .slice(0, 10);
+
+    const singleDayResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/nutrition/${userId}/range/summary?startDate=${localDate}&endDate=${localDate}`,
+        )
+        .expect(200);
+
+    expect(
+      singleDayResponse.body.data.dayCount,
+    ).toBe(1);
+
+    expect(
+      singleDayResponse.body.data.daysWithMeals,
+    ).toBe(1);
+
+    expect(
+      singleDayResponse.body.data.totalCaloriesKcal,
+    ).toBe(378);
+
+    expect(
+      singleDayResponse.body.data.averageCaloriesKcalPerDay,
+    ).toBe(378);
+
+    const twoDayResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/nutrition/${userId}/range/summary?startDate=${previousDate}&endDate=${localDate}`,
+        )
+        .expect(200);
+
+    expect(
+      twoDayResponse.body.data.dayCount,
+    ).toBe(2);
+
+    expect(
+      twoDayResponse.body.data.daysWithMeals,
+    ).toBe(1);
+
+    expect(
+      twoDayResponse.body.data.mealCount,
+    ).toBe(1);
+
+    expect(
+      twoDayResponse.body.data.itemCount,
+    ).toBe(2);
+
+    expect(
+      twoDayResponse.body.data.totalCaloriesKcal,
+    ).toBe(378);
+
+    expect(
+      twoDayResponse.body.data.totalProteinG,
+    ).toBe(16);
+
+    expect(
+      twoDayResponse.body.data.totalCarbsG,
+    ).toBe(52);
+
+    expect(
+      twoDayResponse.body.data.totalFatG,
+    ).toBe(12);
+
+    expect(
+      twoDayResponse.body.data.averageCaloriesKcalPerDay,
+    ).toBe(189);
+
+    expect(
+      twoDayResponse.body.data.averageProteinGPerDay,
+    ).toBe(8);
+
+    expect(
+      twoDayResponse.body.data.averageCarbsGPerDay,
+    ).toBe(26);
+
+    expect(
+      twoDayResponse.body.data.averageFatGPerDay,
+    ).toBe(6);
+
+    expect(
+      twoDayResponse.body.data.dailySummaries,
+    ).toHaveLength(1);
+
+    expect(
+      twoDayResponse.body.data.dailySummaries[0].localDate,
+    ).toBe(localDate);
+
+    const reversedResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/nutrition/${userId}/range/summary?startDate=${localDate}&endDate=${previousDate}`,
+        )
+        .expect(400);
+
+    expect(
+      reversedResponse.body.message,
+    ).toBe(
+      'startDate must not be after endDate',
+    );
+  });
+
 });
