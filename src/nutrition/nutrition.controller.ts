@@ -194,6 +194,40 @@ export class NutritionController {
     };
   }
 
+  @Get(':userId/date/:localDate/summary')
+  async getSummaryByDate(
+    @Param('userId')
+    userId: string,
+    @Param('localDate')
+    localDate: string,
+  ) {
+    return {
+      status: 'ok',
+      data:
+        await this.nutritionService.getSummaryByDate(
+          userId,
+          localDate,
+        ),
+    };
+  }
+
+  @Get(':userId/date/:localDate')
+  async getByDate(
+    @Param('userId')
+    userId: string,
+    @Param('localDate')
+    localDate: string,
+  ) {
+    return {
+      status: 'ok',
+      data:
+        await this.nutritionService.getByDate(
+          userId,
+          localDate,
+        ),
+    };
+  }
+
   @Get(':userId/today/summary')
   async getTodaySummary(
     @Param('userId')

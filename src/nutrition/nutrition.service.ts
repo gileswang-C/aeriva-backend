@@ -223,9 +223,9 @@ export class NutritionService {
     };
   }
 
-  async getToday(
+  async getByDate(
     userId: string,
-    utcOffsetMinutes = 480,
+    localDate: string,
   ) {
     if (!userId?.trim()) {
       throw new BadRequestException(
@@ -233,10 +233,9 @@ export class NutritionService {
       );
     }
 
-    const localDate =
-      this.getLocalDate(
-        utcOffsetMinutes,
-      );
+    this.validateLocalDate(
+      localDate,
+    );
 
     const meals =
       await this.prisma.mealLog.findMany({
@@ -259,7 +258,6 @@ export class NutritionService {
     return {
       userId,
       localDate,
-      utcOffsetMinutes,
       meals:
         meals.map((meal) =>
           this.mapMeal(meal),
@@ -267,14 +265,14 @@ export class NutritionService {
     };
   }
 
-  async getTodaySummary(
+  async getSummaryByDate(
     userId: string,
-    utcOffsetMinutes = 480,
+    localDate: string,
   ) {
-    const today =
-      await this.getToday(
+    const day =
+      await this.getByDate(
         userId,
-        utcOffsetMinutes,
+        localDate,
       );
 
     let itemCount = 0;
@@ -283,7 +281,7 @@ export class NutritionService {
     let totalCarbsG = 0;
     let totalFatG = 0;
 
-    for (const meal of today.meals) {
+    for (const meal of day.meals) {
       for (const item of meal.items) {
         itemCount += 1;
 
@@ -308,11 +306,9 @@ export class NutritionService {
 
     return {
       userId,
-      localDate:
-        today.localDate,
-      utcOffsetMinutes,
+      localDate,
       mealCount:
-        today.meals.length,
+        day.meals.length,
       itemCount,
       totalCaloriesKcal:
         round1(
@@ -331,6 +327,80 @@ export class NutritionService {
           totalFatG,
         ),
     };
+  }
+
+  async getToday(
+    userId: string,
+    utcOffsetMinutes = 480,
+  ) {
+    const localDate =
+      this.getLocalDate(
+        utcOffsetMinutes,
+      );
+
+    const day =
+      await this.getByDate(
+        userId,
+        localDate,
+      );
+
+    return {
+      ...day,
+      utcOffsetMinutes,
+    };
+  }
+
+  async getTodaySummary(
+    userId: string,
+    utcOffsetMinutes = 480,
+  ) {
+    const localDate =
+      this.getLocalDate(
+        utcOffsetMinutes,
+      );
+
+    const summary =
+      await this.getSummaryByDate(
+        userId,
+        localDate,
+      );
+
+    return {
+      ...summary,
+      utcOffsetMinutes,
+    };
+  }
+
+  private validateLocalDate(
+    localDate: string,
+  ) {
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(
+        localDate,
+      )
+    ) {
+      throw new BadRequestException(
+        'localDate must use YYYY-MM-DD format',
+      );
+    }
+
+    const parsed =
+      new Date(
+        `${localDate}T00:00:00.000Z`,
+      );
+
+    if (
+      Number.isNaN(
+        parsed.getTime(),
+      ) ||
+      parsed
+        .toISOString()
+        .slice(0, 10) !== localDate
+    ) {
+      throw new BadRequestException(
+        'localDate is invalid',
+      );
+    }
   }
 
   private getLocalDate(

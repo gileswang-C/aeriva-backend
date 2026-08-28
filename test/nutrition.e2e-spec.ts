@@ -294,4 +294,101 @@ describe('Nutrition (e2e)', () => {
       summaryAfterDelete.body.data.totalFatG,
     ).toBe(0);
   });
+  it('supports historical date queries and rejects invalid dates', async () => {
+    const userId =
+      'e2e-nutrition-history-user';
+
+    const createResponse =
+      await request(app.getHttpServer())
+        .post(
+          '/nutrition/meals?utcOffsetMinutes=480',
+        )
+        .send({
+          userId,
+          mealType: 'BREAKFAST',
+          source: 'MANUAL',
+          items: [
+            {
+              foodName: '燕麦',
+              caloriesKcal: 228,
+              proteinG: 8,
+              carbsG: 40,
+              fatG: 4,
+            },
+            {
+              foodName: '牛奶',
+              caloriesKcal: 150,
+              proteinG: 8,
+              carbsG: 12,
+              fatG: 8,
+            },
+          ],
+        })
+        .expect(201);
+
+    const localDate =
+      createResponse.body.data.localDate;
+
+    const dayResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/nutrition/${userId}/date/${localDate}`,
+        )
+        .expect(200);
+
+    expect(
+      dayResponse.body.data.localDate,
+    ).toBe(localDate);
+
+    expect(
+      dayResponse.body.data.meals,
+    ).toHaveLength(1);
+
+    expect(
+      dayResponse.body.data.meals[0].items,
+    ).toHaveLength(2);
+
+    const summaryResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/nutrition/${userId}/date/${localDate}/summary`,
+        )
+        .expect(200);
+
+    expect(
+      summaryResponse.body.data.mealCount,
+    ).toBe(1);
+
+    expect(
+      summaryResponse.body.data.itemCount,
+    ).toBe(2);
+
+    expect(
+      summaryResponse.body.data.totalCaloriesKcal,
+    ).toBe(378);
+
+    expect(
+      summaryResponse.body.data.totalProteinG,
+    ).toBe(16);
+
+    expect(
+      summaryResponse.body.data.totalCarbsG,
+    ).toBe(52);
+
+    expect(
+      summaryResponse.body.data.totalFatG,
+    ).toBe(12);
+
+    const invalidDateResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/nutrition/${userId}/date/2026-02-30`,
+        )
+        .expect(400);
+
+    expect(
+      invalidDateResponse.body.message,
+    ).toBe('localDate is invalid');
+  });
+
 });
