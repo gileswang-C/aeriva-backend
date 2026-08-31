@@ -502,6 +502,250 @@ export class NutritionService {
     };
   }
 
+  async getWeeklyReport(
+    userId: string,
+    utcOffsetMinutes = 480,
+  ) {
+    if (!userId?.trim()) {
+      throw new BadRequestException(
+        'userId is required',
+      );
+    }
+
+    const endDate =
+      this.getLocalDate(
+        utcOffsetMinutes,
+      );
+
+    const end =
+      new Date(
+        `${endDate}T00:00:00.000Z`,
+      );
+
+    const startDate =
+      new Date(
+        end.getTime() -
+          6 *
+            24 *
+            60 *
+            60 *
+            1000,
+      )
+        .toISOString()
+        .slice(0, 10);
+
+    const [
+      range,
+      targetRecord,
+    ] = await Promise.all([
+      this.getRangeSummary(
+        userId,
+        startDate,
+        endDate,
+      ),
+      this.prisma.nutritionDailyTarget.findUnique({
+        where: {
+          userId,
+        },
+      }),
+    ]);
+
+    const round1 = (
+      value: number,
+    ) =>
+      Math.round(value * 10) / 10;
+
+    const loggingRatePercent =
+      round1(
+        (
+          range.daysWithMeals /
+          range.dayCount
+        ) *
+          100,
+      );
+
+    const coverageStatus =
+      range.daysWithMeals === 0
+        ? 'NO_DATA'
+        : range.daysWithMeals ===
+            range.dayCount
+          ? 'COMPLETE'
+          : 'PARTIAL';
+
+    const averagePerLoggedDay = (
+      value: number,
+    ) => {
+      if (
+        range.daysWithMeals === 0
+      ) {
+        return 0;
+      }
+
+      return round1(
+        value /
+          range.daysWithMeals,
+      );
+    };
+
+    const buildWeeklyTargetProgress = (
+      dailyTarget: number | null,
+      consumed: number,
+    ) => {
+      if (dailyTarget === null) {
+        return null;
+      }
+
+      const weeklyTarget =
+        round1(
+          dailyTarget *
+            range.dayCount,
+        );
+
+      const loggedDaysTarget =
+        round1(
+          dailyTarget *
+            range.daysWithMeals,
+        );
+
+      const difference =
+        round1(
+          consumed -
+            weeklyTarget,
+        );
+
+      const loggedDaysDifference =
+        round1(
+          consumed -
+            loggedDaysTarget,
+        );
+
+      const completionPercent =
+        weeklyTarget === 0
+          ? null
+          : round1(
+              (
+                consumed /
+                weeklyTarget
+              ) *
+                100,
+            );
+
+      const loggedDaysCompletionPercent =
+        loggedDaysTarget === 0
+          ? null
+          : round1(
+              (
+                consumed /
+                loggedDaysTarget
+              ) *
+                100,
+            );
+
+      return {
+        dailyTarget:
+          round1(
+            dailyTarget,
+          ),
+        weeklyTarget,
+        loggedDaysTarget,
+        consumed:
+          round1(
+            consumed,
+          ),
+        difference,
+        loggedDaysDifference,
+        completionPercent,
+        loggedDaysCompletionPercent,
+      };
+    };
+
+    const target =
+      targetRecord
+        ? {
+            source:
+              targetRecord.source,
+            calories:
+              buildWeeklyTargetProgress(
+                targetRecord.dailyCaloriesKcal,
+                range.totalCaloriesKcal,
+              ),
+            protein:
+              buildWeeklyTargetProgress(
+                targetRecord.proteinG,
+                range.totalProteinG,
+              ),
+            carbs:
+              buildWeeklyTargetProgress(
+                targetRecord.carbsG,
+                range.totalCarbsG,
+              ),
+            fat:
+              buildWeeklyTargetProgress(
+                targetRecord.fatG,
+                range.totalFatG,
+              ),
+          }
+        : null;
+
+    return {
+      userId,
+      startDate,
+      endDate,
+      utcOffsetMinutes,
+      logging: {
+        dayCount:
+          range.dayCount,
+        daysWithMeals:
+          range.daysWithMeals,
+        loggingRatePercent,
+        coverageStatus,
+        mealCount:
+          range.mealCount,
+        itemCount:
+          range.itemCount,
+      },
+      intake: {
+        totalCaloriesKcal:
+          range.totalCaloriesKcal,
+        totalProteinG:
+          range.totalProteinG,
+        totalCarbsG:
+          range.totalCarbsG,
+        totalFatG:
+          range.totalFatG,
+
+        averageCaloriesKcalPerDay:
+          range.averageCaloriesKcalPerDay,
+        averageProteinGPerDay:
+          range.averageProteinGPerDay,
+        averageCarbsGPerDay:
+          range.averageCarbsGPerDay,
+        averageFatGPerDay:
+          range.averageFatGPerDay,
+
+        averageCaloriesKcalPerLoggedDay:
+          averagePerLoggedDay(
+            range.totalCaloriesKcal,
+          ),
+        averageProteinGPerLoggedDay:
+          averagePerLoggedDay(
+            range.totalProteinG,
+          ),
+        averageCarbsGPerLoggedDay:
+          averagePerLoggedDay(
+            range.totalCarbsG,
+          ),
+        averageFatGPerLoggedDay:
+          averagePerLoggedDay(
+            range.totalFatG,
+          ),
+      },
+      target,
+      dailySummaries:
+        range.dailySummaries,
+    };
+  }
+
   async getTodayProgress(
     userId: string,
     utcOffsetMinutes = 480,

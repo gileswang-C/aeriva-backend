@@ -6,6 +6,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { PrismaService } from './../src/prisma/prisma.service';
 
 describe('Nutrition (e2e)', () => {
   let app: INestApplication<App>;
@@ -899,6 +900,249 @@ describe('Nutrition (e2e)', () => {
     ).toBe(
       'clientRequestId is already used by another user',
     );
+  });
+
+  it('covers weekly report data coverage states', async () => {
+    const noDataUserId =
+      'e2e-weekly-no-data-user';
+
+    const noDataResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/nutrition/${noDataUserId}/weekly-report?utcOffsetMinutes=480`,
+        )
+        .expect(200);
+
+    expect(
+      noDataResponse.body.data.logging,
+    ).toEqual({
+      dayCount: 7,
+      daysWithMeals: 0,
+      loggingRatePercent: 0,
+      coverageStatus: 'NO_DATA',
+      mealCount: 0,
+      itemCount: 0,
+    });
+
+    expect(
+      noDataResponse.body.data.target,
+    ).toBeNull();
+
+    expect(
+      noDataResponse.body.data.intake
+        .averageCaloriesKcalPerLoggedDay,
+    ).toBe(0);
+
+    const partialUserId =
+      'e2e-weekly-partial-user';
+
+    await request(app.getHttpServer())
+      .put(
+        `/nutrition/${partialUserId}/target`,
+      )
+      .send({
+        dailyCaloriesKcal: 1800,
+        proteinG: 160,
+        carbsG: 180,
+        fatG: 55,
+        source: 'MANUAL',
+      })
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .post(
+        '/nutrition/meals?utcOffsetMinutes=480',
+      )
+      .send({
+        userId: partialUserId,
+        clientRequestId:
+          'e2e-weekly-partial-meal',
+        mealType: 'LUNCH',
+        source: 'MANUAL',
+        items: [
+          {
+            foodName: '鸡胸肉',
+            caloriesKcal: 330,
+            proteinG: 62,
+            carbsG: 0,
+            fatG: 7.2,
+          },
+          {
+            foodName: '米饭',
+            caloriesKcal: 260,
+            proteinG: 5,
+            carbsG: 57,
+            fatG: 0.5,
+          },
+        ],
+      })
+      .expect(201);
+
+    const partialResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/nutrition/${partialUserId}/weekly-report?utcOffsetMinutes=480`,
+        )
+        .expect(200);
+
+    expect(
+      partialResponse.body.data.logging.coverageStatus,
+    ).toBe('PARTIAL');
+
+    expect(
+      partialResponse.body.data.logging.daysWithMeals,
+    ).toBe(1);
+
+    expect(
+      partialResponse.body.data.logging.loggingRatePercent,
+    ).toBe(14.3);
+
+    expect(
+      partialResponse.body.data.intake
+        .averageCaloriesKcalPerDay,
+    ).toBe(84.3);
+
+    expect(
+      partialResponse.body.data.intake
+        .averageCaloriesKcalPerLoggedDay,
+    ).toBe(590);
+
+    expect(
+      partialResponse.body.data.target.calories,
+    ).toEqual({
+      dailyTarget: 1800,
+      weeklyTarget: 12600,
+      loggedDaysTarget: 1800,
+      consumed: 590,
+      difference: -12010,
+      loggedDaysDifference: -1210,
+      completionPercent: 4.7,
+      loggedDaysCompletionPercent: 32.8,
+    });
+
+    const completeUserId =
+      'e2e-weekly-complete-user';
+
+    await request(app.getHttpServer())
+      .put(
+        `/nutrition/${completeUserId}/target`,
+      )
+      .send({
+        dailyCaloriesKcal: 1000,
+        proteinG: 100,
+        carbsG: 100,
+        fatG: 50,
+        source: 'MANUAL',
+      })
+      .expect(200);
+
+    const prisma =
+      app.get(PrismaService);
+
+    const endDate =
+      new Date(
+        Date.now() +
+          480 *
+            60 *
+            1000,
+      )
+        .toISOString()
+        .slice(0, 10);
+
+    const end =
+      new Date(
+        `${endDate}T00:00:00.000Z`,
+      );
+
+    for (
+      let daysAgo = 6;
+      daysAgo >= 0;
+      daysAgo -= 1
+    ) {
+      const localDate =
+        new Date(
+          end.getTime() -
+            daysAgo *
+              24 *
+              60 *
+              60 *
+              1000,
+        )
+          .toISOString()
+          .slice(0, 10);
+
+      await prisma.mealLog.create({
+        data: {
+          userId: completeUserId,
+          localDate,
+          utcOffsetMinutes: 480,
+          mealType: 'DINNER',
+          source: 'MANUAL',
+          items: {
+            create: [
+              {
+                foodName:
+                  `完整记录测试餐-${localDate}`,
+                caloriesKcal: 100,
+                proteinG: 10,
+                carbsG: 20,
+                fatG: 5,
+              },
+            ],
+          },
+        },
+      });
+    }
+
+    const completeResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/nutrition/${completeUserId}/weekly-report?utcOffsetMinutes=480`,
+        )
+        .expect(200);
+
+    expect(
+      completeResponse.body.data.logging,
+    ).toEqual({
+      dayCount: 7,
+      daysWithMeals: 7,
+      loggingRatePercent: 100,
+      coverageStatus: 'COMPLETE',
+      mealCount: 7,
+      itemCount: 7,
+    });
+
+    expect(
+      completeResponse.body.data.intake
+        .totalCaloriesKcal,
+    ).toBe(700);
+
+    expect(
+      completeResponse.body.data.intake
+        .averageCaloriesKcalPerDay,
+    ).toBe(100);
+
+    expect(
+      completeResponse.body.data.intake
+        .averageCaloriesKcalPerLoggedDay,
+    ).toBe(100);
+
+    expect(
+      completeResponse.body.data.target.calories,
+    ).toEqual({
+      dailyTarget: 1000,
+      weeklyTarget: 7000,
+      loggedDaysTarget: 7000,
+      consumed: 700,
+      difference: -6300,
+      loggedDaysDifference: -6300,
+      completionPercent: 10,
+      loggedDaysCompletionPercent: 10,
+    });
+
+    expect(
+      completeResponse.body.data.dailySummaries,
+    ).toHaveLength(7);
   });
 
 });
