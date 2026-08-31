@@ -539,4 +539,148 @@ describe('Nutrition (e2e)', () => {
     );
   });
 
+  it('tracks daily nutrition target progress without creating duplicate targets', async () => {
+    const userId =
+      'e2e-nutrition-target-user';
+
+    const firstTargetResponse =
+      await request(app.getHttpServer())
+        .put(
+          `/nutrition/${userId}/target`,
+        )
+        .send({
+          dailyCaloriesKcal: 2000,
+          proteinG: 150,
+          carbsG: 220,
+          fatG: 60,
+          source: 'MANUAL',
+        })
+        .expect(200);
+
+    const targetId =
+      firstTargetResponse.body.data
+        .nutritionDailyTargetId;
+
+    expect(
+      firstTargetResponse.body.data.dailyCaloriesKcal,
+    ).toBe(2000);
+
+    const getTargetResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/nutrition/${userId}/target`,
+        )
+        .expect(200);
+
+    expect(
+      getTargetResponse.body.data
+        .nutritionDailyTargetId,
+    ).toBe(targetId);
+
+    const updatedTargetResponse =
+      await request(app.getHttpServer())
+        .put(
+          `/nutrition/${userId}/target`,
+        )
+        .send({
+          dailyCaloriesKcal: 1800,
+          proteinG: 160,
+          carbsG: 180,
+          fatG: 55,
+          source: 'MANUAL',
+        })
+        .expect(200);
+
+    expect(
+      updatedTargetResponse.body.data
+        .nutritionDailyTargetId,
+    ).toBe(targetId);
+
+    expect(
+      updatedTargetResponse.body.data.dailyCaloriesKcal,
+    ).toBe(1800);
+
+    await request(app.getHttpServer())
+      .post(
+        '/nutrition/meals?utcOffsetMinutes=480',
+      )
+      .send({
+        userId,
+        mealType: 'LUNCH',
+        source: 'MANUAL',
+        items: [
+          {
+            foodName: '鸡胸肉',
+            caloriesKcal: 330,
+            proteinG: 62,
+            carbsG: 0,
+            fatG: 7.2,
+          },
+          {
+            foodName: '米饭',
+            caloriesKcal: 260,
+            proteinG: 5,
+            carbsG: 57,
+            fatG: 0.5,
+          },
+        ],
+      })
+      .expect(201);
+
+    const progressResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/nutrition/${userId}/today/progress?utcOffsetMinutes=480`,
+        )
+        .expect(200);
+
+    expect(
+      progressResponse.body.data.calories,
+    ).toEqual({
+      target: 1800,
+      consumed: 590,
+      remaining: 1210,
+      completionPercent: 32.8,
+    });
+
+    expect(
+      progressResponse.body.data.protein,
+    ).toEqual({
+      target: 160,
+      consumed: 67,
+      remaining: 93,
+      completionPercent: 41.9,
+    });
+
+    expect(
+      progressResponse.body.data.carbs,
+    ).toEqual({
+      target: 180,
+      consumed: 57,
+      remaining: 123,
+      completionPercent: 31.7,
+    });
+
+    expect(
+      progressResponse.body.data.fat,
+    ).toEqual({
+      target: 55,
+      consumed: 7.7,
+      remaining: 47.3,
+      completionPercent: 14,
+    });
+
+    expect(
+      progressResponse.body.data.mealCount,
+    ).toBe(1);
+
+    expect(
+      progressResponse.body.data.itemCount,
+    ).toBe(2);
+
+    expect(
+      progressResponse.body.data.targetSource,
+    ).toBe('MANUAL');
+  });
+
 });

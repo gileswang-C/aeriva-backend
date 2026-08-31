@@ -128,12 +128,72 @@ class UpdateMealBody {
   items?: MealItemBody[];
 }
 
+class UpsertNutritionTargetBody {
+  @IsNumber()
+  @Min(1)
+  dailyCaloriesKcal!: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  proteinG?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  carbsG?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  fatG?: number;
+
+  @IsOptional()
+  @IsString()
+  @IsIn([
+    'MANUAL',
+    'AI',
+  ])
+  source?: string;
+}
+
 @Controller('nutrition')
 export class NutritionController {
   constructor(
     private readonly nutritionService:
       NutritionService,
   ) {}
+
+  @Put(':userId/target')
+  async upsertDailyTarget(
+    @Param('userId')
+    userId: string,
+    @Body()
+    body: UpsertNutritionTargetBody,
+  ) {
+    return {
+      status: 'ok',
+      data:
+        await this.nutritionService.upsertDailyTarget(
+          userId,
+          body,
+        ),
+    };
+  }
+
+  @Get(':userId/target')
+  async getDailyTarget(
+    @Param('userId')
+    userId: string,
+  ) {
+    return {
+      status: 'ok',
+      data:
+        await this.nutritionService.getDailyTarget(
+          userId,
+        ),
+    };
+  }
 
   @Post('meals')
   async createMeal(
@@ -250,6 +310,28 @@ export class NutritionController {
         await this.nutritionService.getByDate(
           userId,
           localDate,
+        ),
+    };
+  }
+
+  @Get(':userId/today/progress')
+  async getTodayProgress(
+    @Param('userId')
+    userId: string,
+    @Query('utcOffsetMinutes')
+    utcOffsetMinutes?: string,
+  ) {
+    const parsedUtcOffsetMinutes =
+      this.parseUtcOffsetMinutes(
+        utcOffsetMinutes,
+      );
+
+    return {
+      status: 'ok',
+      data:
+        await this.nutritionService.getTodayProgress(
+          userId,
+          parsedUtcOffsetMinutes,
         ),
     };
   }

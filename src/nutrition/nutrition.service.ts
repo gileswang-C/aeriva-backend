@@ -23,6 +23,14 @@ export interface CreateMealInput {
   items: MealItemInput[];
 }
 
+export interface UpsertNutritionTargetInput {
+  dailyCaloriesKcal: number;
+  proteinG?: number;
+  carbsG?: number;
+  fatG?: number;
+  source?: string;
+}
+
 export interface UpdateMealInput {
   mealType?: string;
   source?: string;
@@ -35,6 +43,80 @@ export class NutritionService {
   constructor(
     private readonly prisma: PrismaService,
   ) {}
+
+  async upsertDailyTarget(
+    userId: string,
+    input: UpsertNutritionTargetInput,
+  ) {
+    if (!userId?.trim()) {
+      throw new BadRequestException(
+        'userId is required',
+      );
+    }
+
+    const target =
+      await this.prisma.nutritionDailyTarget.upsert({
+        where: {
+          userId,
+        },
+        create: {
+          userId,
+          dailyCaloriesKcal:
+            input.dailyCaloriesKcal,
+          proteinG:
+            input.proteinG,
+          carbsG:
+            input.carbsG,
+          fatG:
+            input.fatG,
+          source:
+            input.source ?? 'MANUAL',
+        },
+        update: {
+          dailyCaloriesKcal:
+            input.dailyCaloriesKcal,
+          proteinG:
+            input.proteinG,
+          carbsG:
+            input.carbsG,
+          fatG:
+            input.fatG,
+          source:
+            input.source ?? 'MANUAL',
+        },
+      });
+
+    return this.mapDailyTarget(
+      target,
+    );
+  }
+
+  async getDailyTarget(
+    userId: string,
+  ) {
+    if (!userId?.trim()) {
+      throw new BadRequestException(
+        'userId is required',
+      );
+    }
+
+    const target =
+      await this.prisma.nutritionDailyTarget.findUnique({
+        where: {
+          userId,
+        },
+      });
+
+    if (!target) {
+      throw new NotFoundException(
+        'Nutrition daily target not found',
+      );
+    }
+
+    return this.mapDailyTarget(
+      target,
+    );
+  }
 
   async createMeal(
     input: CreateMealInput,
@@ -326,6 +408,103 @@ export class NutritionService {
         round1(
           totalFatG,
         ),
+    };
+  }
+
+  async getTodayProgress(
+    userId: string,
+    utcOffsetMinutes = 480,
+  ) {
+    const [
+      target,
+      consumed,
+    ] = await Promise.all([
+      this.getDailyTarget(
+        userId,
+      ),
+      this.getTodaySummary(
+        userId,
+        utcOffsetMinutes,
+      ),
+    ]);
+
+    const round1 = (
+      value: number,
+    ) =>
+      Math.round(value * 10) / 10;
+
+    const buildProgress = (
+      targetValue: number | null,
+      consumedValue: number,
+    ) => {
+      if (targetValue === null) {
+        return {
+          target: null,
+          consumed:
+            round1(
+              consumedValue,
+            ),
+          remaining: null,
+          completionPercent: null,
+        };
+      }
+
+      return {
+        target:
+          round1(
+            targetValue,
+          ),
+        consumed:
+          round1(
+            consumedValue,
+          ),
+        remaining:
+          round1(
+            targetValue -
+              consumedValue,
+          ),
+        completionPercent:
+          round1(
+            (
+              consumedValue /
+              targetValue
+            ) *
+              100,
+          ),
+      };
+    };
+
+    return {
+      userId,
+      localDate:
+        consumed.localDate,
+      utcOffsetMinutes,
+      calories:
+        buildProgress(
+          target.dailyCaloriesKcal,
+          consumed.totalCaloriesKcal,
+        ),
+      protein:
+        buildProgress(
+          target.proteinG,
+          consumed.totalProteinG,
+        ),
+      carbs:
+        buildProgress(
+          target.carbsG,
+          consumed.totalCarbsG,
+        ),
+      fat:
+        buildProgress(
+          target.fatG,
+          consumed.totalFatG,
+        ),
+      mealCount:
+        consumed.mealCount,
+      itemCount:
+        consumed.itemCount,
+      targetSource:
+        target.source,
     };
   }
 
@@ -644,6 +823,41 @@ export class NutritionService {
         'localDate is invalid',
       );
     }
+  }
+
+  private mapDailyTarget(
+    target: {
+      id: number;
+      userId: string;
+      dailyCaloriesKcal: number;
+      proteinG: number | null;
+      carbsG: number | null;
+      fatG: number | null;
+      source: string;
+      createdAt: Date;
+      updatedAt: Date;
+    },
+  ) {
+    return {
+      nutritionDailyTargetId:
+        target.id,
+      userId:
+        target.userId,
+      dailyCaloriesKcal:
+        target.dailyCaloriesKcal,
+      proteinG:
+        target.proteinG,
+      carbsG:
+        target.carbsG,
+      fatG:
+        target.fatG,
+      source:
+        target.source,
+      createdAt:
+        target.createdAt,
+      updatedAt:
+        target.updatedAt,
+    };
   }
 
   private getLocalDate(
