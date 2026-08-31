@@ -1307,4 +1307,283 @@ describe('Nutrition (e2e)', () => {
     });
   });
 
+  it('classifies weekly nutrition insights deterministically', async () => {
+    const prisma =
+      app.get(PrismaService);
+
+    const currentDate =
+      new Date(
+        Date.now() +
+          480 *
+            60 *
+            1000,
+      )
+        .toISOString()
+        .slice(0, 10);
+
+    const current =
+      new Date(
+        `${currentDate}T00:00:00.000Z`,
+      );
+
+    const previousDate =
+      new Date(
+        current.getTime() -
+          7 *
+            24 *
+            60 *
+            60 *
+            1000,
+      )
+        .toISOString()
+        .slice(0, 10);
+
+    const createTarget = async (
+      userId: string,
+      calories: number,
+      protein: number,
+    ) => {
+      await request(app.getHttpServer())
+        .put(
+          `/nutrition/${userId}/target`,
+        )
+        .send({
+          dailyCaloriesKcal:
+            calories,
+          proteinG:
+            protein,
+          carbsG: 100,
+          fatG: 50,
+          source: 'MANUAL',
+        })
+        .expect(200);
+    };
+
+    const createMeal = async (
+      userId: string,
+      localDate: string,
+      calories: number,
+      protein: number,
+    ) => {
+      await prisma.mealLog.create({
+        data: {
+          userId,
+          localDate,
+          utcOffsetMinutes: 480,
+          mealType: 'DINNER',
+          source: 'MANUAL',
+          items: {
+            create: [
+              {
+                foodName:
+                  `insight-test-${localDate}`,
+                caloriesKcal:
+                  calories,
+                proteinG:
+                  protein,
+                carbsG: 50,
+                fatG: 20,
+              },
+            ],
+          },
+        },
+      });
+    };
+
+    const insufficientUserId =
+      'e2e-weekly-insight-insufficient';
+
+    await createTarget(
+      insufficientUserId,
+      600,
+      50,
+    );
+
+    await createMeal(
+      insufficientUserId,
+      currentDate,
+      600,
+      50,
+    );
+
+    const insufficientResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/nutrition/${insufficientUserId}/weekly-insights?utcOffsetMinutes=480`,
+        )
+        .expect(200);
+
+    expect(
+      insufficientResponse.body.data.calorieStatus,
+    ).toBe('ON_TARGET');
+
+    expect(
+      insufficientResponse.body.data.proteinStatus,
+    ).toBe('ON_TARGET');
+
+    expect(
+      insufficientResponse.body.data.comparisonStatus,
+    ).toBe(
+      'INSUFFICIENT_DATA',
+    );
+
+    expect(
+      insufficientResponse.body.data.calorieTrend,
+    ).toBe(
+      'INSUFFICIENT_DATA',
+    );
+
+    expect(
+      insufficientResponse.body.data.proteinTrend,
+    ).toBe(
+      'INSUFFICIENT_DATA',
+    );
+
+    const upUserId =
+      'e2e-weekly-insight-up';
+
+    await createTarget(
+      upUserId,
+      500,
+      40,
+    );
+
+    await createMeal(
+      upUserId,
+      previousDate,
+      400,
+      30,
+    );
+
+    await createMeal(
+      upUserId,
+      currentDate,
+      650,
+      55,
+    );
+
+    const upResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/nutrition/${upUserId}/weekly-insights?utcOffsetMinutes=480`,
+        )
+        .expect(200);
+
+    expect(
+      upResponse.body.data.calorieStatus,
+    ).toBe('ABOVE_TARGET');
+
+    expect(
+      upResponse.body.data.proteinStatus,
+    ).toBe('ABOVE_TARGET');
+
+    expect(
+      upResponse.body.data.comparisonStatus,
+    ).toBe('COMPARABLE');
+
+    expect(
+      upResponse.body.data.calorieTrend,
+    ).toBe('UP');
+
+    expect(
+      upResponse.body.data.proteinTrend,
+    ).toBe('UP');
+
+    const downUserId =
+      'e2e-weekly-insight-down';
+
+    await createTarget(
+      downUserId,
+      500,
+      40,
+    );
+
+    await createMeal(
+      downUserId,
+      previousDate,
+      600,
+      50,
+    );
+
+    await createMeal(
+      downUserId,
+      currentDate,
+      350,
+      25,
+    );
+
+    const downResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/nutrition/${downUserId}/weekly-insights?utcOffsetMinutes=480`,
+        )
+        .expect(200);
+
+    expect(
+      downResponse.body.data.calorieStatus,
+    ).toBe('BELOW_TARGET');
+
+    expect(
+      downResponse.body.data.proteinStatus,
+    ).toBe('BELOW_TARGET');
+
+    expect(
+      downResponse.body.data.calorieTrend,
+    ).toBe('DOWN');
+
+    expect(
+      downResponse.body.data.proteinTrend,
+    ).toBe('DOWN');
+
+    const stableUserId =
+      'e2e-weekly-insight-stable';
+
+    await createTarget(
+      stableUserId,
+      500,
+      40,
+    );
+
+    await createMeal(
+      stableUserId,
+      previousDate,
+      450,
+      35,
+    );
+
+    await createMeal(
+      stableUserId,
+      currentDate,
+      500,
+      40,
+    );
+
+    const stableResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/nutrition/${stableUserId}/weekly-insights?utcOffsetMinutes=480`,
+        )
+        .expect(200);
+
+    expect(
+      stableResponse.body.data.calorieStatus,
+    ).toBe('ON_TARGET');
+
+    expect(
+      stableResponse.body.data.proteinStatus,
+    ).toBe('ON_TARGET');
+
+    expect(
+      stableResponse.body.data.comparisonStatus,
+    ).toBe('COMPARABLE');
+
+    expect(
+      stableResponse.body.data.calorieTrend,
+    ).toBe('STABLE');
+
+    expect(
+      stableResponse.body.data.proteinTrend,
+    ).toBe('STABLE');
+  });
+
 });

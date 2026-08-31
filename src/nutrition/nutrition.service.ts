@@ -502,6 +502,119 @@ export class NutritionService {
     };
   }
 
+  async getWeeklyInsights(
+    userId: string,
+    utcOffsetMinutes = 480,
+  ) {
+    const [
+      report,
+      comparison,
+    ] = await Promise.all([
+      this.getWeeklyReport(
+        userId,
+        utcOffsetMinutes,
+      ),
+      this.getWeeklyComparison(
+        userId,
+        utcOffsetMinutes,
+      ),
+    ]);
+
+    const classifyTarget = (
+      completionPercent:
+        number | null | undefined,
+    ) => {
+      if (
+        completionPercent === null ||
+        completionPercent === undefined
+      ) {
+        return 'NO_TARGET';
+      }
+
+      if (completionPercent < 80) {
+        return 'BELOW_TARGET';
+      }
+
+      if (completionPercent > 120) {
+        return 'ABOVE_TARGET';
+      }
+
+      return 'ON_TARGET';
+    };
+
+    const classifyTrend = (
+      change: number | null,
+      threshold: number,
+    ) => {
+      if (change === null) {
+        return 'INSUFFICIENT_DATA';
+      }
+
+      if (change > threshold) {
+        return 'UP';
+      }
+
+      if (change < -threshold) {
+        return 'DOWN';
+      }
+
+      return 'STABLE';
+    };
+
+    const calorieCompletion =
+      report.target?.calories
+        ?.loggedDaysCompletionPercent ??
+      null;
+
+    const proteinCompletion =
+      report.target?.protein
+        ?.loggedDaysCompletionPercent ??
+      null;
+
+    const calorieChange =
+      comparison.changes
+        ?.averageCaloriesKcalPerLoggedDay ??
+      null;
+
+    const proteinChange =
+      comparison.changes
+        ?.averageProteinGPerLoggedDay ??
+      null;
+
+    return {
+      userId,
+      startDate:
+        report.startDate,
+      endDate:
+        report.endDate,
+      utcOffsetMinutes,
+      dataStatus:
+        report.logging.coverageStatus,
+      loggingRatePercent:
+        report.logging.loggingRatePercent,
+      calorieStatus:
+        classifyTarget(
+          calorieCompletion,
+        ),
+      proteinStatus:
+        classifyTarget(
+          proteinCompletion,
+        ),
+      comparisonStatus:
+        comparison.comparisonStatus,
+      calorieTrend:
+        classifyTrend(
+          calorieChange,
+          100,
+        ),
+      proteinTrend:
+        classifyTrend(
+          proteinChange,
+          10,
+        ),
+    };
+  }
+
   async getWeeklyComparison(
     userId: string,
     utcOffsetMinutes = 480,
