@@ -520,6 +520,7 @@ export class NutritionService {
         | 'LOW';
       category:
         | 'DATA'
+        | 'TARGET'
         | 'CALORIES'
         | 'PROTEIN'
         | 'MAINTENANCE';
@@ -546,6 +547,18 @@ export class NutritionService {
             ? 'HIGH'
             : 'MEDIUM',
         category: 'DATA',
+      });
+    }
+
+    if (
+      insights.calorieStatus ===
+      'NO_TARGET'
+    ) {
+      recommendations.push({
+        code:
+          'SET_NUTRITION_TARGET',
+        priority: 'HIGH',
+        category: 'TARGET',
       });
     }
 

@@ -1688,7 +1688,50 @@ describe('Nutrition (e2e)', () => {
         priority: 'HIGH',
         category: 'DATA',
       },
+      {
+        code:
+          'SET_NUTRITION_TARGET',
+        priority: 'HIGH',
+        category: 'TARGET',
+      },
     ]);
+
+    const targetNoDataUserId =
+      'e2e-weekly-recommendation-target-no-data';
+
+    await createTarget(
+      targetNoDataUserId,
+      500,
+      40,
+    );
+
+    const targetNoDataResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/nutrition/${targetNoDataUserId}/weekly-recommendations?utcOffsetMinutes=480`,
+        )
+        .expect(200);
+
+    const targetNoDataCodes =
+      targetNoDataResponse.body.data.recommendations.map(
+        (
+          item: {
+            code: string;
+          },
+        ) => item.code,
+      );
+
+    expect(
+      targetNoDataCodes,
+    ).toEqual([
+      'START_NUTRITION_LOGGING',
+    ]);
+
+    expect(
+      targetNoDataCodes,
+    ).not.toContain(
+      'SET_NUTRITION_TARGET',
+    );
 
     const upUserId =
       'e2e-weekly-recommendation-up';
