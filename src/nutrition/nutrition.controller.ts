@@ -63,6 +63,11 @@ class CreateMealBody {
   @IsNotEmpty()
   userId!: string;
 
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  clientRequestId?: string;
+
   @IsString()
   @IsIn([
     'BREAKFAST',

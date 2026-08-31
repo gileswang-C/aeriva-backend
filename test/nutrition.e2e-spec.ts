@@ -791,4 +791,114 @@ describe('Nutrition (e2e)', () => {
     });
   });
 
+  it('prevents duplicate meal creation with clientRequestId', async () => {
+    const userId =
+      'e2e-nutrition-idempotency-user';
+
+    const clientRequestId =
+      'e2e-meal-request-001';
+
+    const payload = {
+      userId,
+      clientRequestId,
+      mealType: 'LUNCH',
+      source: 'MANUAL',
+      note: 'idempotency test',
+      items: [
+        {
+          foodName: '鸡胸肉',
+          caloriesKcal: 330,
+          proteinG: 62,
+          carbsG: 0,
+          fatG: 7.2,
+        },
+        {
+          foodName: '米饭',
+          caloriesKcal: 260,
+          proteinG: 5,
+          carbsG: 57,
+          fatG: 0.5,
+        },
+      ],
+    };
+
+    const firstResponse =
+      await request(app.getHttpServer())
+        .post(
+          '/nutrition/meals?utcOffsetMinutes=480',
+        )
+        .send(payload)
+        .expect(201);
+
+    const secondResponse =
+      await request(app.getHttpServer())
+        .post(
+          '/nutrition/meals?utcOffsetMinutes=480',
+        )
+        .send(payload)
+        .expect(201);
+
+    expect(
+      secondResponse.body.data.mealLogId,
+    ).toBe(
+      firstResponse.body.data.mealLogId,
+    );
+
+    expect(
+      secondResponse.body.data.items,
+    ).toEqual(
+      firstResponse.body.data.items,
+    );
+
+    expect(
+      secondResponse.body.data.createdAt,
+    ).toBe(
+      firstResponse.body.data.createdAt,
+    );
+
+    const todayResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/nutrition/${userId}/today?utcOffsetMinutes=480`,
+        )
+        .expect(200);
+
+    expect(
+      todayResponse.body.data.meals,
+    ).toHaveLength(1);
+
+    expect(
+      todayResponse.body.data.meals[0].items,
+    ).toHaveLength(2);
+
+    const anotherUserResponse =
+      await request(app.getHttpServer())
+        .post(
+          '/nutrition/meals?utcOffsetMinutes=480',
+        )
+        .send({
+          userId:
+            'e2e-nutrition-idempotency-another-user',
+          clientRequestId,
+          mealType: 'LUNCH',
+          source: 'MANUAL',
+          items: [
+            {
+              foodName: '测试食物',
+              caloriesKcal: 100,
+              proteinG: 10,
+              carbsG: 10,
+              fatG: 2,
+            },
+          ],
+        })
+        .expect(400);
+
+    expect(
+      anotherUserResponse.body.message,
+    ).toBe(
+      'clientRequestId is already used by another user',
+    );
+  });
+
 });

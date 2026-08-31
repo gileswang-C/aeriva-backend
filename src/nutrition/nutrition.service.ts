@@ -17,6 +17,7 @@ export interface MealItemInput {
 
 export interface CreateMealInput {
   userId: string;
+  clientRequestId?: string;
   mealType: string;
   source?: string;
   note?: string;
@@ -122,53 +123,143 @@ export class NutritionService {
     input: CreateMealInput,
     utcOffsetMinutes = 480,
   ) {
+    if (input.clientRequestId) {
+      const existing =
+        await this.prisma.mealLog.findUnique({
+          where: {
+            clientRequestId:
+              input.clientRequestId,
+          },
+          include: {
+            items: {
+              orderBy: {
+                id: 'asc',
+              },
+            },
+          },
+        });
+
+      if (existing) {
+        if (
+          existing.userId !==
+          input.userId
+        ) {
+          throw new BadRequestException(
+            'clientRequestId is already used by another user',
+          );
+        }
+
+        return this.mapMeal(
+          existing,
+        );
+      }
+    }
+
     const localDate =
       this.getLocalDate(
         utcOffsetMinutes,
       );
 
-    const meal =
-      await this.prisma.mealLog.create({
-        data: {
-          userId: input.userId,
-          localDate,
-          utcOffsetMinutes,
-          mealType: input.mealType,
-          source:
-            input.source ?? 'MANUAL',
-          note: input.note,
-          items: {
-            create:
-              input.items.map(
-                (item) => ({
-                  foodName:
-                    item.foodName,
-                  caloriesKcal:
-                    item.caloriesKcal,
-                  proteinG:
-                    item.proteinG,
-                  carbsG:
-                    item.carbsG,
-                  fatG:
-                    item.fatG,
-                  quantity:
-                    item.quantity,
-                  unit:
-                    item.unit,
-                }),
-              ),
-          },
-        },
-        include: {
-          items: {
-            orderBy: {
-              id: 'asc',
+    try {
+      const meal =
+        await this.prisma.mealLog.create({
+          data: {
+            userId:
+              input.userId,
+            clientRequestId:
+              input.clientRequestId,
+            localDate,
+            utcOffsetMinutes,
+            mealType:
+              input.mealType,
+            source:
+              input.source ?? 'MANUAL',
+            note:
+              input.note,
+            items: {
+              create:
+                input.items.map(
+                  (item) => ({
+                    foodName:
+                      item.foodName,
+                    caloriesKcal:
+                      item.caloriesKcal,
+                    proteinG:
+                      item.proteinG,
+                    carbsG:
+                      item.carbsG,
+                    fatG:
+                      item.fatG,
+                    quantity:
+                      item.quantity,
+                    unit:
+                      item.unit,
+                  }),
+                ),
             },
           },
-        },
-      });
+          include: {
+            items: {
+              orderBy: {
+                id: 'asc',
+              },
+            },
+          },
+        });
 
-    return this.mapMeal(meal);
+      return this.mapMeal(
+        meal,
+      );
+    } catch (error: unknown) {
+      const isUniqueConstraintError =
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (
+          error as {
+            code?: string;
+          }
+        ).code === 'P2002';
+
+      if (
+        !isUniqueConstraintError ||
+        !input.clientRequestId
+      ) {
+        throw error;
+      }
+
+      const existing =
+        await this.prisma.mealLog.findUnique({
+          where: {
+            clientRequestId:
+              input.clientRequestId,
+          },
+          include: {
+            items: {
+              orderBy: {
+                id: 'asc',
+              },
+            },
+          },
+        });
+
+      if (!existing) {
+        throw error;
+      }
+
+      if (
+        existing.userId !==
+        input.userId
+      ) {
+        throw new BadRequestException(
+          'clientRequestId is already used by another user',
+        );
+      }
+
+      return this.mapMeal(
+        existing,
+      );
+    }
   }
 
   async updateMeal(

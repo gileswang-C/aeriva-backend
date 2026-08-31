@@ -191,6 +191,7 @@ model TrainingPerformanceFeedback {
 model MealLog {
   id               Int      @id @default(autoincrement())
   userId           String
+  clientRequestId  String?  @unique
   localDate        String
   utcOffsetMinutes Int      @default(480)
   mealType         String
