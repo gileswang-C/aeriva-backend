@@ -502,6 +502,160 @@ export class NutritionService {
     };
   }
 
+  async getWeeklyRecommendations(
+    userId: string,
+    utcOffsetMinutes = 480,
+  ) {
+    const insights =
+      await this.getWeeklyInsights(
+        userId,
+        utcOffsetMinutes,
+      );
+
+    const recommendations: {
+      code: string;
+      priority:
+        | 'HIGH'
+        | 'MEDIUM'
+        | 'LOW';
+      category:
+        | 'DATA'
+        | 'CALORIES'
+        | 'PROTEIN'
+        | 'MAINTENANCE';
+    }[] = [];
+
+    if (
+      insights.dataStatus === 'NO_DATA'
+    ) {
+      recommendations.push({
+        code:
+          'START_NUTRITION_LOGGING',
+        priority: 'HIGH',
+        category: 'DATA',
+      });
+    } else if (
+      insights.dataStatus === 'PARTIAL'
+    ) {
+      recommendations.push({
+        code:
+          'IMPROVE_NUTRITION_LOGGING',
+        priority:
+          insights.loggingRatePercent <
+          50
+            ? 'HIGH'
+            : 'MEDIUM',
+        category: 'DATA',
+      });
+    }
+
+    if (
+      insights.calorieStatus ===
+      'BELOW_TARGET'
+    ) {
+      recommendations.push({
+        code:
+          'INCREASE_CALORIE_INTAKE',
+        priority: 'MEDIUM',
+        category: 'CALORIES',
+      });
+    }
+
+    if (
+      insights.calorieStatus ===
+      'ABOVE_TARGET'
+    ) {
+      recommendations.push({
+        code:
+          'REDUCE_CALORIE_INTAKE',
+        priority: 'MEDIUM',
+        category: 'CALORIES',
+      });
+    }
+
+    if (
+      insights.proteinStatus ===
+      'BELOW_TARGET'
+    ) {
+      recommendations.push({
+        code:
+          'INCREASE_PROTEIN_INTAKE',
+        priority: 'MEDIUM',
+        category: 'PROTEIN',
+      });
+    }
+
+    if (
+      insights.calorieStatus ===
+        'ABOVE_TARGET' &&
+      insights.calorieTrend === 'UP'
+    ) {
+      recommendations.push({
+        code:
+          'WATCH_CALORIE_UPWARD_TREND',
+        priority: 'MEDIUM',
+        category: 'CALORIES',
+      });
+    }
+
+    if (
+      insights.calorieStatus ===
+        'BELOW_TARGET' &&
+      insights.calorieTrend === 'DOWN'
+    ) {
+      recommendations.push({
+        code:
+          'WATCH_CALORIE_DOWNWARD_TREND',
+        priority: 'MEDIUM',
+        category: 'CALORIES',
+      });
+    }
+
+    if (
+      insights.proteinStatus ===
+        'BELOW_TARGET' &&
+      insights.proteinTrend === 'DOWN'
+    ) {
+      recommendations.push({
+        code:
+          'WATCH_PROTEIN_DOWNWARD_TREND',
+        priority: 'MEDIUM',
+        category: 'PROTEIN',
+      });
+    }
+
+    if (
+      recommendations.length === 0 &&
+      insights.dataStatus ===
+        'COMPLETE' &&
+      insights.calorieStatus ===
+        'ON_TARGET' &&
+      insights.proteinStatus ===
+        'ON_TARGET'
+    ) {
+      recommendations.push({
+        code:
+          'MAINTAIN_CURRENT_NUTRITION_PATTERN',
+        priority: 'LOW',
+        category: 'MAINTENANCE',
+      });
+    }
+
+    return {
+      userId,
+      startDate:
+        insights.startDate,
+      endDate:
+        insights.endDate,
+      utcOffsetMinutes,
+      dataStatus:
+        insights.dataStatus,
+      recommendationCount:
+        recommendations.length,
+      recommendations,
+    };
+  }
+
   async getWeeklyInsights(
     userId: string,
     utcOffsetMinutes = 480,

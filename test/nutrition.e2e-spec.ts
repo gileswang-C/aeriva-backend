@@ -1586,4 +1586,259 @@ describe('Nutrition (e2e)', () => {
     ).toBe('STABLE');
   });
 
+  it('generates deterministic weekly nutrition recommendations', async () => {
+    const prisma =
+      app.get(PrismaService);
+
+    const currentDate =
+      new Date(
+        Date.now() +
+          480 *
+            60 *
+            1000,
+      )
+        .toISOString()
+        .slice(0, 10);
+
+    const current =
+      new Date(
+        `${currentDate}T00:00:00.000Z`,
+      );
+
+    const previousDate =
+      new Date(
+        current.getTime() -
+          7 *
+            24 *
+            60 *
+            60 *
+            1000,
+      )
+        .toISOString()
+        .slice(0, 10);
+
+    const createTarget = async (
+      userId: string,
+      calories: number,
+      protein: number,
+    ) => {
+      await request(app.getHttpServer())
+        .put(
+          `/nutrition/${userId}/target`,
+        )
+        .send({
+          dailyCaloriesKcal:
+            calories,
+          proteinG:
+            protein,
+          carbsG: 100,
+          fatG: 50,
+          source: 'MANUAL',
+        })
+        .expect(200);
+    };
+
+    const createMeal = async (
+      userId: string,
+      localDate: string,
+      calories: number,
+      protein: number,
+    ) => {
+      await prisma.mealLog.create({
+        data: {
+          userId,
+          localDate,
+          utcOffsetMinutes: 480,
+          mealType: 'DINNER',
+          source: 'MANUAL',
+          items: {
+            create: [
+              {
+                foodName:
+                  `recommendation-test-${localDate}`,
+                caloriesKcal:
+                  calories,
+                proteinG:
+                  protein,
+                carbsG: 50,
+                fatG: 20,
+              },
+            ],
+          },
+        },
+      });
+    };
+
+    const noDataUserId =
+      'e2e-weekly-recommendation-no-data';
+
+    const noDataResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/nutrition/${noDataUserId}/weekly-recommendations?utcOffsetMinutes=480`,
+        )
+        .expect(200);
+
+    expect(
+      noDataResponse.body.data.recommendations,
+    ).toEqual([
+      {
+        code:
+          'START_NUTRITION_LOGGING',
+        priority: 'HIGH',
+        category: 'DATA',
+      },
+    ]);
+
+    const upUserId =
+      'e2e-weekly-recommendation-up';
+
+    await createTarget(
+      upUserId,
+      500,
+      40,
+    );
+
+    await createMeal(
+      upUserId,
+      previousDate,
+      400,
+      40,
+    );
+
+    await createMeal(
+      upUserId,
+      currentDate,
+      650,
+      40,
+    );
+
+    const upResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/nutrition/${upUserId}/weekly-recommendations?utcOffsetMinutes=480`,
+        )
+        .expect(200);
+
+    const upCodes =
+      upResponse.body.data.recommendations.map(
+        (
+          item: {
+            code: string;
+          },
+        ) => item.code,
+      );
+
+    expect(
+      upCodes,
+    ).toEqual([
+      'IMPROVE_NUTRITION_LOGGING',
+      'REDUCE_CALORIE_INTAKE',
+      'WATCH_CALORIE_UPWARD_TREND',
+    ]);
+
+    const downUserId =
+      'e2e-weekly-recommendation-down';
+
+    await createTarget(
+      downUserId,
+      500,
+      40,
+    );
+
+    await createMeal(
+      downUserId,
+      previousDate,
+      600,
+      40,
+    );
+
+    await createMeal(
+      downUserId,
+      currentDate,
+      350,
+      40,
+    );
+
+    const downResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/nutrition/${downUserId}/weekly-recommendations?utcOffsetMinutes=480`,
+        )
+        .expect(200);
+
+    const downCodes =
+      downResponse.body.data.recommendations.map(
+        (
+          item: {
+            code: string;
+          },
+        ) => item.code,
+      );
+
+    expect(
+      downCodes,
+    ).toEqual([
+      'IMPROVE_NUTRITION_LOGGING',
+      'INCREASE_CALORIE_INTAKE',
+      'WATCH_CALORIE_DOWNWARD_TREND',
+    ]);
+
+    const maintainUserId =
+      'e2e-weekly-recommendation-maintain';
+
+    await createTarget(
+      maintainUserId,
+      500,
+      40,
+    );
+
+    for (
+      let daysAgo = 6;
+      daysAgo >= 0;
+      daysAgo -= 1
+    ) {
+      const localDate =
+        new Date(
+          current.getTime() -
+            daysAgo *
+              24 *
+              60 *
+              60 *
+              1000,
+        )
+          .toISOString()
+          .slice(0, 10);
+
+      await createMeal(
+        maintainUserId,
+        localDate,
+        500,
+        40,
+      );
+    }
+
+    const maintainResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/nutrition/${maintainUserId}/weekly-recommendations?utcOffsetMinutes=480`,
+        )
+        .expect(200);
+
+    expect(
+      maintainResponse.body.data.dataStatus,
+    ).toBe('COMPLETE');
+
+    expect(
+      maintainResponse.body.data.recommendations,
+    ).toEqual([
+      {
+        code:
+          'MAINTAIN_CURRENT_NUTRITION_PATTERN',
+        priority: 'LOW',
+        category: 'MAINTENANCE',
+      },
+    ]);
+  });
+
 });
