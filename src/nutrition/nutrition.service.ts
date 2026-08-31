@@ -502,6 +502,237 @@ export class NutritionService {
     };
   }
 
+  async getWeeklyComparison(
+    userId: string,
+    utcOffsetMinutes = 480,
+  ) {
+    if (!userId?.trim()) {
+      throw new BadRequestException(
+        'userId is required',
+      );
+    }
+
+    const currentEndDate =
+      this.getLocalDate(
+        utcOffsetMinutes,
+      );
+
+    const currentEnd =
+      new Date(
+        `${currentEndDate}T00:00:00.000Z`,
+      );
+
+    const currentStartDate =
+      new Date(
+        currentEnd.getTime() -
+          6 *
+            24 *
+            60 *
+            60 *
+            1000,
+      )
+        .toISOString()
+        .slice(0, 10);
+
+    const previousEndDate =
+      new Date(
+        currentEnd.getTime() -
+          7 *
+            24 *
+            60 *
+            60 *
+            1000,
+      )
+        .toISOString()
+        .slice(0, 10);
+
+    const previousEnd =
+      new Date(
+        `${previousEndDate}T00:00:00.000Z`,
+      );
+
+    const previousStartDate =
+      new Date(
+        previousEnd.getTime() -
+          6 *
+            24 *
+            60 *
+            60 *
+            1000,
+      )
+        .toISOString()
+        .slice(0, 10);
+
+    const [
+      current,
+      previous,
+    ] = await Promise.all([
+      this.getRangeSummary(
+        userId,
+        currentStartDate,
+        currentEndDate,
+      ),
+      this.getRangeSummary(
+        userId,
+        previousStartDate,
+        previousEndDate,
+      ),
+    ]);
+
+    const round1 = (
+      value: number,
+    ) =>
+      Math.round(value * 10) / 10;
+
+    const buildPeriod = (
+      range: typeof current,
+    ) => {
+      const loggingRatePercent =
+        round1(
+          (
+            range.daysWithMeals /
+            range.dayCount
+          ) *
+            100,
+        );
+
+      const coverageStatus =
+        range.daysWithMeals === 0
+          ? 'NO_DATA'
+          : range.daysWithMeals ===
+              range.dayCount
+            ? 'COMPLETE'
+            : 'PARTIAL';
+
+      const perLoggedDay = (
+        value: number,
+      ) =>
+        range.daysWithMeals === 0
+          ? 0
+          : round1(
+              value /
+                range.daysWithMeals,
+            );
+
+      return {
+        startDate:
+          range.startDate,
+        endDate:
+          range.endDate,
+        dayCount:
+          range.dayCount,
+        daysWithMeals:
+          range.daysWithMeals,
+        loggingRatePercent,
+        coverageStatus,
+        mealCount:
+          range.mealCount,
+        itemCount:
+          range.itemCount,
+        totalCaloriesKcal:
+          range.totalCaloriesKcal,
+        totalProteinG:
+          range.totalProteinG,
+        totalCarbsG:
+          range.totalCarbsG,
+        totalFatG:
+          range.totalFatG,
+        averageCaloriesKcalPerDay:
+          range.averageCaloriesKcalPerDay,
+        averageProteinGPerDay:
+          range.averageProteinGPerDay,
+        averageCarbsGPerDay:
+          range.averageCarbsGPerDay,
+        averageFatGPerDay:
+          range.averageFatGPerDay,
+        averageCaloriesKcalPerLoggedDay:
+          perLoggedDay(
+            range.totalCaloriesKcal,
+          ),
+        averageProteinGPerLoggedDay:
+          perLoggedDay(
+            range.totalProteinG,
+          ),
+        averageCarbsGPerLoggedDay:
+          perLoggedDay(
+            range.totalCarbsG,
+          ),
+        averageFatGPerLoggedDay:
+          perLoggedDay(
+            range.totalFatG,
+          ),
+      };
+    };
+
+    const currentPeriod =
+      buildPeriod(
+        current,
+      );
+
+    const previousPeriod =
+      buildPeriod(
+        previous,
+      );
+
+    const difference = (
+      currentValue: number,
+      previousValue: number,
+    ) =>
+      round1(
+        currentValue -
+          previousValue,
+      );
+
+    const comparisonStatus =
+      current.daysWithMeals === 0 ||
+      previous.daysWithMeals === 0
+        ? 'INSUFFICIENT_DATA'
+        : 'COMPARABLE';
+
+    return {
+      userId,
+      utcOffsetMinutes,
+      comparisonStatus,
+      currentPeriod,
+      previousPeriod,
+      changes:
+        comparisonStatus === 'COMPARABLE'
+          ? {
+              daysWithMeals:
+                difference(
+                  currentPeriod.daysWithMeals,
+                  previousPeriod.daysWithMeals,
+                ),
+              loggingRatePercentagePoints:
+                difference(
+                  currentPeriod.loggingRatePercent,
+                  previousPeriod.loggingRatePercent,
+                ),
+              averageCaloriesKcalPerLoggedDay:
+                difference(
+                  currentPeriod.averageCaloriesKcalPerLoggedDay,
+                  previousPeriod.averageCaloriesKcalPerLoggedDay,
+                ),
+              averageProteinGPerLoggedDay:
+                difference(
+                  currentPeriod.averageProteinGPerLoggedDay,
+                  previousPeriod.averageProteinGPerLoggedDay,
+                ),
+              averageCarbsGPerLoggedDay:
+                difference(
+                  currentPeriod.averageCarbsGPerLoggedDay,
+                  previousPeriod.averageCarbsGPerLoggedDay,
+                ),
+              averageFatGPerLoggedDay:
+                difference(
+                  currentPeriod.averageFatGPerLoggedDay,
+                  previousPeriod.averageFatGPerLoggedDay,
+                ),
+            }
+          : null,
+    };
+  }
+
   async getWeeklyReport(
     userId: string,
     utcOffsetMinutes = 480,

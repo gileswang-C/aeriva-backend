@@ -1145,4 +1145,166 @@ describe('Nutrition (e2e)', () => {
     ).toHaveLength(7);
   });
 
+  it('compares consecutive nutrition weeks safely', async () => {
+    const prisma =
+      app.get(PrismaService);
+
+    const endDate =
+      new Date(
+        Date.now() +
+          480 *
+            60 *
+            1000,
+      )
+        .toISOString()
+        .slice(0, 10);
+
+    const end =
+      new Date(
+        `${endDate}T00:00:00.000Z`,
+      );
+
+    const previousEndDate =
+      new Date(
+        end.getTime() -
+          7 *
+            24 *
+            60 *
+            60 *
+            1000,
+      )
+        .toISOString()
+        .slice(0, 10);
+
+    const insufficientUserId =
+      'e2e-weekly-comparison-insufficient-user';
+
+    await prisma.mealLog.create({
+      data: {
+        userId:
+          insufficientUserId,
+        localDate:
+          endDate,
+        utcOffsetMinutes: 480,
+        mealType: 'DINNER',
+        source: 'MANUAL',
+        items: {
+          create: [
+            {
+              foodName: '当前周测试餐',
+              caloriesKcal: 600,
+              proteinG: 50,
+              carbsG: 60,
+              fatG: 25,
+            },
+          ],
+        },
+      },
+    });
+
+    const insufficientResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/nutrition/${insufficientUserId}/weekly-comparison?utcOffsetMinutes=480`,
+        )
+        .expect(200);
+
+    expect(
+      insufficientResponse.body.data.comparisonStatus,
+    ).toBe(
+      'INSUFFICIENT_DATA',
+    );
+
+    expect(
+      insufficientResponse.body.data.currentPeriod.coverageStatus,
+    ).toBe('PARTIAL');
+
+    expect(
+      insufficientResponse.body.data.previousPeriod.coverageStatus,
+    ).toBe('NO_DATA');
+
+    expect(
+      insufficientResponse.body.data.changes,
+    ).toBeNull();
+
+    const comparableUserId =
+      'e2e-weekly-comparison-comparable-user';
+
+    await prisma.mealLog.create({
+      data: {
+        userId:
+          comparableUserId,
+        localDate:
+          previousEndDate,
+        utcOffsetMinutes: 480,
+        mealType: 'DINNER',
+        source: 'MANUAL',
+        items: {
+          create: [
+            {
+              foodName: '上周测试餐',
+              caloriesKcal: 400,
+              proteinG: 30,
+              carbsG: 40,
+              fatG: 15,
+            },
+          ],
+        },
+      },
+    });
+
+    await prisma.mealLog.create({
+      data: {
+        userId:
+          comparableUserId,
+        localDate:
+          endDate,
+        utcOffsetMinutes: 480,
+        mealType: 'DINNER',
+        source: 'MANUAL',
+        items: {
+          create: [
+            {
+              foodName: '本周测试餐',
+              caloriesKcal: 600,
+              proteinG: 50,
+              carbsG: 60,
+              fatG: 25,
+            },
+          ],
+        },
+      },
+    });
+
+    const comparableResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/nutrition/${comparableUserId}/weekly-comparison?utcOffsetMinutes=480`,
+        )
+        .expect(200);
+
+    expect(
+      comparableResponse.body.data.comparisonStatus,
+    ).toBe('COMPARABLE');
+
+    expect(
+      comparableResponse.body.data.currentPeriod.daysWithMeals,
+    ).toBe(1);
+
+    expect(
+      comparableResponse.body.data.previousPeriod.daysWithMeals,
+    ).toBe(1);
+
+    expect(
+      comparableResponse.body.data.changes,
+    ).toEqual({
+      daysWithMeals: 0,
+      loggingRatePercentagePoints: 0,
+      averageCaloriesKcalPerLoggedDay: 200,
+      averageProteinGPerLoggedDay: 20,
+      averageCarbsGPerLoggedDay: 20,
+      averageFatGPerLoggedDay: 10,
+    });
+  });
+
 });

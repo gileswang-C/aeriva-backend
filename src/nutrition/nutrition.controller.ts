@@ -319,6 +319,28 @@ export class NutritionController {
     };
   }
 
+  @Get(':userId/weekly-comparison')
+  async getWeeklyComparison(
+    @Param('userId')
+    userId: string,
+    @Query('utcOffsetMinutes')
+    utcOffsetMinutes?: string,
+  ) {
+    const parsedUtcOffsetMinutes =
+      this.parseUtcOffsetMinutes(
+        utcOffsetMinutes,
+      );
+
+    return {
+      status: 'ok',
+      data:
+        await this.nutritionService.getWeeklyComparison(
+          userId,
+          parsedUtcOffsetMinutes,
+        ),
+    };
+  }
+
   @Get(':userId/weekly-report')
   async getWeeklyReport(
     @Param('userId')
