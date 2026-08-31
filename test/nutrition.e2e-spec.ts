@@ -683,4 +683,112 @@ describe('Nutrition (e2e)', () => {
     ).toBe('MANUAL');
   });
 
+  it('handles nutrition target and progress edge cases', async () => {
+    const noTargetUserId =
+      'e2e-nutrition-no-target-user';
+
+    const noTargetResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/nutrition/${noTargetUserId}/today/progress?utcOffsetMinutes=480`,
+        )
+        .expect(404);
+
+    expect(
+      noTargetResponse.body.message,
+    ).toBe(
+      'Nutrition daily target not found',
+    );
+
+    const invalidTargetUserId =
+      'e2e-nutrition-invalid-target-user';
+
+    await request(app.getHttpServer())
+      .put(
+        `/nutrition/${invalidTargetUserId}/target`,
+      )
+      .send({
+        dailyCaloriesKcal: 0,
+        proteinG: 100,
+        carbsG: 100,
+        fatG: 50,
+        source: 'MANUAL',
+      })
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .put(
+        `/nutrition/${invalidTargetUserId}/target`,
+      )
+      .send({
+        dailyCaloriesKcal: 1800,
+        proteinG: -1,
+        carbsG: 100,
+        fatG: 50,
+        source: 'MANUAL',
+      })
+      .expect(400);
+
+    const overTargetUserId =
+      'e2e-nutrition-over-target-user';
+
+    await request(app.getHttpServer())
+      .put(
+        `/nutrition/${overTargetUserId}/target`,
+      )
+      .send({
+        dailyCaloriesKcal: 500,
+        proteinG: 40,
+        carbsG: 50,
+        fatG: 20,
+        source: 'MANUAL',
+      })
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .post(
+        '/nutrition/meals?utcOffsetMinutes=480',
+      )
+      .send({
+        userId: overTargetUserId,
+        mealType: 'DINNER',
+        source: 'MANUAL',
+        items: [
+          {
+            foodName: '测试餐',
+            caloriesKcal: 600,
+            proteinG: 50,
+            carbsG: 60,
+            fatG: 25,
+          },
+        ],
+      })
+      .expect(201);
+
+    const progressResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/nutrition/${overTargetUserId}/today/progress?utcOffsetMinutes=480`,
+        )
+        .expect(200);
+
+    expect(
+      progressResponse.body.data.calories,
+    ).toEqual({
+      target: 500,
+      consumed: 600,
+      remaining: -100,
+      completionPercent: 120,
+    });
+
+    expect(
+      progressResponse.body.data.protein,
+    ).toEqual({
+      target: 40,
+      consumed: 50,
+      remaining: -10,
+      completionPercent: 125,
+    });
+  });
+
 });
