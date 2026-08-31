@@ -1841,4 +1841,87 @@ describe('Nutrition (e2e)', () => {
     ]);
   });
 
+  it('distinguishes missing nutrition targets from missing weekly intake data', async () => {
+    const noTargetUserId =
+      'e2e-weekly-insights-no-target';
+
+    const noTargetResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/nutrition/${noTargetUserId}/weekly-insights?utcOffsetMinutes=480`,
+        )
+        .expect(200);
+
+    expect(
+      noTargetResponse.body.data.calorieStatus,
+    ).toBe('NO_TARGET');
+
+    expect(
+      noTargetResponse.body.data.proteinStatus,
+    ).toBe('NO_TARGET');
+
+    const targetNoDataUserId =
+      'e2e-weekly-insights-target-no-data';
+
+    await request(app.getHttpServer())
+      .put(
+        `/nutrition/${targetNoDataUserId}/target`,
+      )
+      .send({
+        dailyCaloriesKcal: 1800,
+        proteinG: 150,
+        carbsG: 180,
+        fatG: 55,
+        source: 'MANUAL',
+      })
+      .expect(200);
+
+    const targetNoDataResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/nutrition/${targetNoDataUserId}/weekly-insights?utcOffsetMinutes=480`,
+        )
+        .expect(200);
+
+    expect(
+      targetNoDataResponse.body.data.dataStatus,
+    ).toBe('NO_DATA');
+
+    expect(
+      targetNoDataResponse.body.data.calorieStatus,
+    ).toBe('INSUFFICIENT_DATA');
+
+    expect(
+      targetNoDataResponse.body.data.proteinStatus,
+    ).toBe('INSUFFICIENT_DATA');
+
+    const caloriesOnlyUserId =
+      'e2e-weekly-insights-calories-only-no-data';
+
+    await request(app.getHttpServer())
+      .put(
+        `/nutrition/${caloriesOnlyUserId}/target`,
+      )
+      .send({
+        dailyCaloriesKcal: 1800,
+        source: 'MANUAL',
+      })
+      .expect(200);
+
+    const caloriesOnlyResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/nutrition/${caloriesOnlyUserId}/weekly-insights?utcOffsetMinutes=480`,
+        )
+        .expect(200);
+
+    expect(
+      caloriesOnlyResponse.body.data.calorieStatus,
+    ).toBe('INSUFFICIENT_DATA');
+
+    expect(
+      caloriesOnlyResponse.body.data.proteinStatus,
+    ).toBe('NO_TARGET');
+  });
+
 });

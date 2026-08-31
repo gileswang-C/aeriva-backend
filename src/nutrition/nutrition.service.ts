@@ -677,12 +677,19 @@ export class NutritionService {
     const classifyTarget = (
       completionPercent:
         number | null | undefined,
+      hasTarget: boolean,
+      hasLoggedData: boolean,
     ) => {
+      if (!hasTarget) {
+        return 'NO_TARGET';
+      }
+
       if (
+        !hasLoggedData ||
         completionPercent === null ||
         completionPercent === undefined
       ) {
-        return 'NO_TARGET';
+        return 'INSUFFICIENT_DATA';
       }
 
       if (completionPercent < 80) {
@@ -725,6 +732,21 @@ export class NutritionService {
         ?.loggedDaysCompletionPercent ??
       null;
 
+    const calorieHasTarget =
+      report.target?.calories
+        ?.dailyTarget !== undefined &&
+      report.target?.calories
+        ?.dailyTarget !== null;
+
+    const proteinHasTarget =
+      report.target?.protein
+        ?.dailyTarget !== undefined &&
+      report.target?.protein
+        ?.dailyTarget !== null;
+
+    const hasLoggedData =
+      report.logging.daysWithMeals > 0;
+
     const calorieChange =
       comparison.changes
         ?.averageCaloriesKcalPerLoggedDay ??
@@ -749,10 +771,14 @@ export class NutritionService {
       calorieStatus:
         classifyTarget(
           calorieCompletion,
+          calorieHasTarget,
+          hasLoggedData,
         ),
       proteinStatus:
         classifyTarget(
           proteinCompletion,
+          proteinHasTarget,
+          hasLoggedData,
         ),
       comparisonStatus:
         comparison.comparisonStatus,
