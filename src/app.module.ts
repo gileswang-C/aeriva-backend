@@ -15,9 +15,10 @@ import { TrainingAdjustmentsModule } from './training-adjustments/training-adjus
 import { NutritionModule } from './nutrition/nutrition.module';
 import { BodyMetricsModule } from './body-metrics/body-metrics.module';
 import { HealthProgressModule } from './health-progress/health-progress.module';
+import { HealthGoalsModule } from './health-goals/health-goals.module';
 
 @Module({
-  imports: [EquipmentModule, UserEquipmentModule, PrismaModule, ExercisesModule, TrainingPlansModule, TrainingSessionsModule, TrainingFeedbackModule, BodyStateModule, PainRiskModule, TrainingAdjustmentsModule, NutritionModule, BodyMetricsModule, HealthProgressModule],
+  imports: [EquipmentModule, UserEquipmentModule, PrismaModule, ExercisesModule, TrainingPlansModule, TrainingSessionsModule, TrainingFeedbackModule, BodyStateModule, PainRiskModule, TrainingAdjustmentsModule, NutritionModule, BodyMetricsModule, HealthProgressModule, HealthGoalsModule],
   controllers: [AppController, HealthController],
   providers: [AppService],
 })

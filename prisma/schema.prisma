@@ -253,3 +253,19 @@ model BodyMetricRecord {
   @@index([userId, measuredAt])
 }
 
+model HealthGoal {
+  id                Int      @id @default(autoincrement())
+  userId            String
+  goalType          String
+  startWeightKg     Float?
+  targetWeightKg    Float?
+  startDate         DateTime
+  targetDate        DateTime?
+  status            String   @default("ACTIVE")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([userId])
+  @@index([userId, status])
+}
+
