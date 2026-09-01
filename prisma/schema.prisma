@@ -238,3 +238,18 @@ model NutritionDailyTarget {
 
   @@index([userId])
 }
+
+model BodyMetricRecord {
+  id          Int      @id @default(autoincrement())
+  userId      String
+  weightKg    Float
+  measuredAt  DateTime
+  note        String?
+  source      String   @default("MANUAL")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([userId, measuredAt])
+}
+
