@@ -45,6 +45,34 @@ export class HealthGoalsController {
     };
   }
 
+  @Post(':goalId/complete')
+  async completeGoal(
+    @Param('goalId')
+    goalId: string,
+  ) {
+    return {
+      status: 'ok',
+      data:
+        await this.healthGoalsService.completeGoal(
+          Number(goalId),
+        ),
+    };
+  }
+
+  @Post(':goalId/cancel')
+  async cancelGoal(
+    @Param('goalId')
+    goalId: string,
+  ) {
+    return {
+      status: 'ok',
+      data:
+        await this.healthGoalsService.cancelGoal(
+          Number(goalId),
+        ),
+    };
+  }
+
   @Get(':userId/active')
   async getActive(
     @Param('userId')

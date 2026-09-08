@@ -279,4 +279,179 @@ describe('Health Goals (e2e)', () => {
       .expect(409);
   });
 
+
+  it('completes an active health goal and allows a new goal', async () => {
+    const userId =
+      'e2e-health-goal-complete-user';
+
+    const createResponse =
+      await request(app.getHttpServer())
+        .post('/health-goals')
+        .send({
+          userId,
+          goalType:
+            'WEIGHT_LOSS',
+          startWeightKg:
+            75,
+          targetWeightKg:
+            68,
+          startDate:
+            '2026-09-01T00:00:00.000Z',
+          targetDate:
+            '2026-12-31T00:00:00.000Z',
+        })
+        .expect(201);
+
+    const goalId =
+      createResponse.body.data.id;
+
+    const completeResponse =
+      await request(app.getHttpServer())
+        .post(
+          `/health-goals/${goalId}/complete`,
+        )
+        .expect(201);
+
+    expect(
+      completeResponse.body.data.status,
+    ).toBe('COMPLETED');
+
+    const activeResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/health-goals/${userId}/active`,
+        )
+        .expect(200);
+
+    expect(
+      activeResponse.body.data,
+    ).toBeNull();
+
+    await request(app.getHttpServer())
+      .post('/health-goals')
+      .send({
+        userId,
+        goalType:
+          'MAINTAIN',
+        startWeightKg:
+          68,
+        targetWeightKg:
+          68,
+        startDate:
+          '2027-01-01T00:00:00.000Z',
+      })
+      .expect(201);
+  });
+
+  it('cancels an active health goal and allows a new goal', async () => {
+    const userId =
+      'e2e-health-goal-cancel-user';
+
+    const createResponse =
+      await request(app.getHttpServer())
+        .post('/health-goals')
+        .send({
+          userId,
+          goalType:
+            'WEIGHT_LOSS',
+          startWeightKg:
+            82,
+          targetWeightKg:
+            74,
+          startDate:
+            '2026-09-01T00:00:00.000Z',
+        })
+        .expect(201);
+
+    const goalId =
+      createResponse.body.data.id;
+
+    const cancelResponse =
+      await request(app.getHttpServer())
+        .post(
+          `/health-goals/${goalId}/cancel`,
+        )
+        .expect(201);
+
+    expect(
+      cancelResponse.body.data.status,
+    ).toBe('CANCELLED');
+
+    await request(app.getHttpServer())
+      .post('/health-goals')
+      .send({
+        userId,
+        goalType:
+          'MUSCLE_GAIN',
+        startWeightKg:
+          82,
+        targetWeightKg:
+          86,
+        startDate:
+          '2026-10-01T00:00:00.000Z',
+      })
+      .expect(201);
+  });
+
+  it('rejects lifecycle changes for inactive or missing goals', async () => {
+    const userId =
+      'e2e-health-goal-lifecycle-protection-user';
+
+    const createResponse =
+      await request(app.getHttpServer())
+        .post('/health-goals')
+        .send({
+          userId,
+          goalType:
+            'WEIGHT_LOSS',
+          startWeightKg:
+            78,
+          targetWeightKg:
+            70,
+          startDate:
+            '2026-09-01T00:00:00.000Z',
+        })
+        .expect(201);
+
+    const goalId =
+      createResponse.body.data.id;
+
+    await request(app.getHttpServer())
+      .post(
+        `/health-goals/${goalId}/complete`,
+      )
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post(
+        `/health-goals/${goalId}/complete`,
+      )
+      .expect(409);
+
+    await request(app.getHttpServer())
+      .post(
+        `/health-goals/${goalId}/cancel`,
+      )
+      .expect(409);
+
+    const missingResponse =
+      await request(app.getHttpServer())
+        .post(
+          '/health-goals/999999/cancel',
+        )
+        .expect(404);
+
+    expect(
+      missingResponse.body.message,
+    ).toBe(
+      'Health goal not found',
+    );
+
+    await request(app.getHttpServer())
+      .post(
+        '/health-goals/not-a-number/complete',
+      )
+      .expect(400);
+  });
+
 });

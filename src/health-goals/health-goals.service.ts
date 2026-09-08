@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -162,6 +163,76 @@ export class HealthGoalsService {
       },
       orderBy: {
         createdAt: 'desc',
+      },
+    });
+  }
+
+  async completeGoal(
+    goalId: number,
+  ) {
+    return this.updateGoalStatus(
+      goalId,
+      'COMPLETED',
+    );
+  }
+
+  async cancelGoal(
+    goalId: number,
+  ) {
+    return this.updateGoalStatus(
+      goalId,
+      'CANCELLED',
+    );
+  }
+
+  private async updateGoalStatus(
+    goalId: number,
+    status:
+      | 'COMPLETED'
+      | 'CANCELLED',
+  ) {
+    if (
+      !Number.isInteger(goalId) ||
+      goalId <= 0
+    ) {
+      throw new BadRequestException(
+        'goalId must be a positive integer',
+      );
+    }
+
+    const result =
+      await this.prisma.healthGoal.updateMany({
+        where: {
+          id: goalId,
+          status: 'ACTIVE',
+        },
+        data: {
+          status,
+        },
+      });
+
+    if (result.count === 0) {
+      const existingGoal =
+        await this.prisma.healthGoal.findUnique({
+          where: {
+            id: goalId,
+          },
+        });
+
+      if (!existingGoal) {
+        throw new NotFoundException(
+          'Health goal not found',
+        );
+      }
+
+      throw new ConflictException(
+        'Health goal is not active',
+      );
+    }
+
+    return this.prisma.healthGoal.findUnique({
+      where: {
+        id: goalId,
       },
     });
   }
