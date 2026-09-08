@@ -58,4 +58,19 @@ export class HealthGoalsController {
         ),
     };
   }
+
+  @Get(':userId/progress')
+  async getProgress(
+    @Param('userId')
+    userId: string,
+  ) {
+    return {
+      status: 'ok',
+      data:
+        await this.healthGoalsService.getProgress(
+          userId,
+        ),
+    };
+  }
+
 }

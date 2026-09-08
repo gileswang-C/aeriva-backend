@@ -69,6 +69,35 @@ describe('Health Progress (e2e)', () => {
     const userId =
       'e2e-health-progress-user';
 
+    const currentDate =
+      new Date(
+        Date.now() +
+          480 *
+            60 *
+            1000,
+      )
+        .toISOString()
+        .slice(0, 10);
+
+    const current =
+      new Date(
+        `${currentDate}T00:00:00.000Z`,
+      );
+
+    const dateDaysAgo = (
+      daysAgo: number,
+    ) =>
+      new Date(
+        current.getTime() -
+          daysAgo *
+            24 *
+            60 *
+            60 *
+            1000,
+      )
+        .toISOString()
+        .slice(0, 10);
+
     await request(app.getHttpServer())
       .post(
         '/body-metrics/weight',
@@ -77,7 +106,7 @@ describe('Health Progress (e2e)', () => {
         userId,
         weightKg: 73.5,
         measuredAt:
-          '2026-08-27T08:00:00.000Z',
+          `${dateDaysAgo(5)}T08:00:00.000Z`,
       })
       .expect(201);
 
@@ -89,7 +118,7 @@ describe('Health Progress (e2e)', () => {
         userId,
         weightKg: 72.5,
         measuredAt:
-          '2026-09-01T08:00:00.000Z',
+          `${dateDaysAgo(0)}T08:00:00.000Z`,
       })
       .expect(201);
 
@@ -134,7 +163,7 @@ describe('Health Progress (e2e)', () => {
           'COMPLETED',
         startedAt:
           new Date(
-            '2026-08-29T08:00:00.000Z',
+            `${dateDaysAgo(2)}T08:00:00.000Z`,
           ),
       },
     });
@@ -148,7 +177,7 @@ describe('Health Progress (e2e)', () => {
           'COMPLETED',
         startedAt:
           new Date(
-            '2026-08-30T08:00:00.000Z',
+            `${dateDaysAgo(1)}T08:00:00.000Z`,
           ),
       },
     });
@@ -162,7 +191,7 @@ describe('Health Progress (e2e)', () => {
           'COMPLETED',
         startedAt:
           new Date(
-            '2026-09-01T08:00:00.000Z',
+            `${dateDaysAgo(0)}T08:00:00.000Z`,
           ),
       },
     });
