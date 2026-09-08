@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
@@ -22,16 +23,117 @@ export class HealthGoalsService {
   async create(
     input: CreateHealthGoalInput,
   ) {
-    if (!input.userId?.trim()) {
+    const userId =
+      input.userId?.trim();
+
+    if (!userId) {
       throw new BadRequestException(
         'userId is required',
       );
     }
 
+    const goalType =
+      input.goalType?.trim();
+
+    const allowedGoalTypes =
+      new Set([
+        'WEIGHT_LOSS',
+        'MUSCLE_GAIN',
+        'MAINTAIN',
+      ]);
+
+    if (
+      !goalType ||
+      !allowedGoalTypes.has(
+        goalType,
+      )
+    ) {
+      throw new BadRequestException(
+        'goalType must be WEIGHT_LOSS, MUSCLE_GAIN, or MAINTAIN',
+      );
+    }
+
+    if (
+      input.startWeightKg !== undefined &&
+      (
+        !Number.isFinite(
+          input.startWeightKg,
+        ) ||
+        input.startWeightKg <= 0
+      )
+    ) {
+      throw new BadRequestException(
+        'startWeightKg must be greater than 0',
+      );
+    }
+
+    if (
+      input.targetWeightKg !== undefined &&
+      (
+        !Number.isFinite(
+          input.targetWeightKg,
+        ) ||
+        input.targetWeightKg <= 0
+      )
+    ) {
+      throw new BadRequestException(
+        'targetWeightKg must be greater than 0',
+      );
+    }
+
+    if (
+      !(input.startDate instanceof Date) ||
+      Number.isNaN(
+        input.startDate.getTime(),
+      )
+    ) {
+      throw new BadRequestException(
+        'startDate must be a valid date',
+      );
+    }
+
+    if (
+      input.targetDate !== undefined
+    ) {
+      if (
+        !(input.targetDate instanceof Date) ||
+        Number.isNaN(
+          input.targetDate.getTime(),
+        )
+      ) {
+        throw new BadRequestException(
+          'targetDate must be a valid date',
+        );
+      }
+
+      if (
+        input.targetDate.getTime() <=
+        input.startDate.getTime()
+      ) {
+        throw new BadRequestException(
+          'targetDate must be after startDate',
+        );
+      }
+    }
+
+    const existingActiveGoal =
+      await this.prisma.healthGoal.findFirst({
+        where: {
+          userId,
+          status: 'ACTIVE',
+        },
+      });
+
+    if (existingActiveGoal) {
+      throw new ConflictException(
+        'active health goal already exists',
+      );
+    }
+
     return this.prisma.healthGoal.create({
       data: {
-        userId: input.userId,
-        goalType: input.goalType,
+        userId,
+        goalType,
         startWeightKg:
           input.startWeightKg,
         targetWeightKg:

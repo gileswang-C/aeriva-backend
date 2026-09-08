@@ -150,4 +150,133 @@ describe('Health Goals (e2e)', () => {
     ).toBe('NO_GOAL');
   });
 
+
+  it('rejects invalid health goal creation inputs', async () => {
+    const userId =
+      'e2e-health-goal-validation-user';
+
+    await request(app.getHttpServer())
+      .post('/health-goals')
+      .send({
+        userId,
+        goalType:
+          'INVALID_GOAL',
+        startWeightKg:
+          75,
+        targetWeightKg:
+          68,
+        startDate:
+          '2026-09-01T00:00:00.000Z',
+      })
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .post('/health-goals')
+      .send({
+        userId,
+        goalType:
+          'WEIGHT_LOSS',
+        startWeightKg:
+          -1,
+        targetWeightKg:
+          68,
+        startDate:
+          '2026-09-01T00:00:00.000Z',
+      })
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .post('/health-goals')
+      .send({
+        userId,
+        goalType:
+          'WEIGHT_LOSS',
+        startWeightKg:
+          75,
+        targetWeightKg:
+          0,
+        startDate:
+          '2026-09-01T00:00:00.000Z',
+      })
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .post('/health-goals')
+      .send({
+        userId,
+        goalType:
+          'WEIGHT_LOSS',
+        startWeightKg:
+          75,
+        targetWeightKg:
+          68,
+        startDate:
+          'not-a-date',
+      })
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .post('/health-goals')
+      .send({
+        userId,
+        goalType:
+          'WEIGHT_LOSS',
+        startWeightKg:
+          75,
+        targetWeightKg:
+          68,
+        startDate:
+          '2026-09-01T00:00:00.000Z',
+        targetDate:
+          'not-a-date',
+      })
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .post('/health-goals')
+      .send({
+        userId,
+        goalType:
+          'WEIGHT_LOSS',
+        startWeightKg:
+          75,
+        targetWeightKg:
+          68,
+        startDate:
+          '2026-09-10T00:00:00.000Z',
+        targetDate:
+          '2026-09-01T00:00:00.000Z',
+      })
+      .expect(400);
+  });
+
+  it('rejects duplicate active health goals', async () => {
+    const userId =
+      'e2e-health-goal-duplicate-user';
+
+    const payload = {
+      userId,
+      goalType:
+        'WEIGHT_LOSS',
+      startWeightKg:
+        75,
+      targetWeightKg:
+        68,
+      startDate:
+        '2026-09-01T00:00:00.000Z',
+      targetDate:
+        '2026-12-31T00:00:00.000Z',
+    };
+
+    await request(app.getHttpServer())
+      .post('/health-goals')
+      .send(payload)
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post('/health-goals')
+      .send(payload)
+      .expect(409);
+  });
+
 });
