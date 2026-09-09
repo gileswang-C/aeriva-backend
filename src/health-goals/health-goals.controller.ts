@@ -102,6 +102,21 @@ export class HealthGoalsController {
   }
 
 
+  @Get(':userId/recommendation')
+  async getRecommendation(
+    @Param('userId')
+    userId: string,
+  ) {
+    return {
+      status: 'ok',
+      data:
+        await this.healthGoalsService.getRecommendation(
+          userId,
+        ),
+    };
+  }
+
+
   @Get(':userId/summary')
   async getSummary(
     @Param('userId')
