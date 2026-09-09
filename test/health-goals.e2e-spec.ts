@@ -727,6 +727,137 @@ describe('Health Goals (e2e)', () => {
   });
 
 
+  it('returns optimal recommendation when goal pace is on track', async () => {
+    const userId =
+      'e2e-health-goal-recommendation-optimal-user';
+
+    await request(app.getHttpServer())
+      .post('/health-goals')
+      .send({
+        userId,
+        goalType:
+          'WEIGHT_LOSS',
+        startWeightKg:
+          75,
+        targetWeightKg:
+          68,
+        startDate:
+          '2026-09-01T00:00:00.000Z',
+        targetDate:
+          '2026-12-31T00:00:00.000Z',
+      })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post('/body-metrics/weight')
+      .send({
+        userId,
+        weightKg:
+          72.5,
+        measuredAt:
+          '2026-09-08T08:00:00.000Z',
+      })
+      .expect(201);
+
+    const response =
+      await request(app.getHttpServer())
+        .get(
+          `/health-goals/${userId}/recommendation`,
+        )
+        .expect(200);
+
+    expect(
+      response.body.data.status,
+    ).toBe('AVAILABLE');
+
+    expect(
+      response.body.data.level,
+    ).toBe('AHEAD');
+
+    expect(
+      response.body.data.actions.length,
+    ).toBeGreaterThan(0);
+  });
+
+
+  it('returns adjustment recommendation when goal pace is behind', async () => {
+    const userId =
+      'e2e-health-goal-recommendation-behind-user';
+
+    await request(app.getHttpServer())
+      .post('/health-goals')
+      .send({
+        userId,
+        goalType:
+          'WEIGHT_LOSS',
+        startWeightKg:
+          75,
+        targetWeightKg:
+          68,
+        startDate:
+          '2026-08-01T00:00:00.000Z',
+        targetDate:
+          '2026-09-01T00:00:00.000Z',
+      })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post('/body-metrics/weight')
+      .send({
+        userId,
+        weightKg:
+          74.5,
+        measuredAt:
+          '2026-08-28T08:00:00.000Z',
+      })
+      .expect(201);
+
+    const response =
+      await request(app.getHttpServer())
+        .get(
+          `/health-goals/${userId}/recommendation`,
+        )
+        .expect(200);
+
+    expect(
+      response.body.data.status,
+    ).toBe('AVAILABLE');
+
+    expect(
+      response.body.data.level,
+    ).toBe('NEEDS_ADJUSTMENT');
+
+    expect(
+      response.body.data.actions.length,
+    ).toBeGreaterThan(0);
+  });
+
+
+  it('returns create goal recommendation when no active goal exists', async () => {
+    const userId =
+      'e2e-health-goal-recommendation-no-goal-user';
+
+    const response =
+      await request(app.getHttpServer())
+        .get(
+          `/health-goals/${userId}/recommendation`,
+        )
+        .expect(200);
+
+    expect(
+      response.body.data.status,
+    ).toBe('NO_GOAL');
+
+    expect(
+      response.body.data.level,
+    ).toBe('CREATE_GOAL');
+
+    expect(
+      response.body.data.actions.length,
+    ).toBeGreaterThan(0);
+  });
+
+
   it('ignores body weight recorded before goal start', async () => {
     const userId =
       'e2e-health-goal-pre-start-weight-user';

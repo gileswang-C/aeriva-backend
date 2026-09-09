@@ -430,6 +430,112 @@ export class HealthGoalsService {
     };
   }
 
+  async getRecommendation(
+    userId: string,
+  ) {
+    const summary =
+      await this.getSummary(
+        userId,
+      );
+
+    if (
+      summary.status ===
+      'NO_GOAL'
+    ) {
+      return {
+        status:
+          'NO_GOAL',
+
+        level:
+          'CREATE_GOAL',
+
+        title:
+          'Create your first health goal',
+
+        actions: [
+          'Set a health goal',
+          'Start tracking body progress',
+        ],
+      };
+    }
+
+    if (
+      summary.status !==
+      'AVAILABLE' ||
+      !('pace' in summary)
+    ) {
+      return summary;
+    }
+
+    let level:
+      | 'AHEAD'
+      | 'OPTIMAL'
+      | 'NEEDS_ADJUSTMENT';
+
+    let title: string;
+
+    let actions: string[];
+
+    if (
+      summary.pace === 'AHEAD'
+    ) {
+      level =
+        'AHEAD';
+
+      title =
+        'Progress is ahead of plan';
+
+      actions = [
+        'Avoid excessive calorie restriction',
+        'Keep strength training consistent',
+      ];
+    } else if (
+      summary.pace === 'BEHIND'
+    ) {
+      level =
+        'NEEDS_ADJUSTMENT';
+
+      title =
+        'Goal progress needs adjustment';
+
+      actions = [
+        'Review nutrition adherence',
+        'Increase daily activity',
+      ];
+    } else {
+      level =
+        'OPTIMAL';
+
+      title =
+        'Goal execution is on track';
+
+      actions = [
+        'Maintain current training plan',
+        'Continue tracking nutrition',
+      ];
+    }
+
+    return {
+      status:
+        'AVAILABLE',
+
+      level,
+
+      title,
+
+      actions,
+
+      metrics: {
+        progressPercent:
+          summary.progressPercent,
+
+        pace:
+          summary.pace,
+      },
+    };
+  }
+
+
   async getSummary(
     userId: string,
   ) {
