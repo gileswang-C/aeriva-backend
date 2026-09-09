@@ -101,4 +101,19 @@ export class HealthGoalsController {
     };
   }
 
+
+  @Get(':userId/summary')
+  async getSummary(
+    @Param('userId')
+    userId: string,
+  ) {
+    return {
+      status: 'ok',
+      data:
+        await this.healthGoalsService.getSummary(
+          userId,
+        ),
+    };
+  }
+
 }

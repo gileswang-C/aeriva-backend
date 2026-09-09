@@ -429,4 +429,142 @@ export class HealthGoalsService {
       trend,
     };
   }
+
+  async getSummary(
+    userId: string,
+  ) {
+    const progress =
+      await this.getProgress(
+        userId,
+      );
+
+    if (
+      progress.status !==
+      'AVAILABLE'
+    ) {
+      return progress;
+    }
+
+    if (
+      !progress.goal ||
+      progress.progressPercent === undefined
+    ) {
+      return {
+        status:
+          'INSUFFICIENT_DATA',
+      };
+    }
+
+    const goal =
+      progress.goal;
+
+    if (
+      !goal.targetDate ||
+      !goal.startDate
+    ) {
+      return {
+        ...progress,
+      };
+    }
+
+    const now =
+      new Date();
+
+    const startTime =
+      goal.startDate.getTime();
+
+    const targetTime =
+      goal.targetDate.getTime();
+
+    const totalDays =
+      Math.ceil(
+        (
+          targetTime -
+          startTime
+        ) /
+        (
+          24 *
+          60 *
+          60 *
+          1000
+        ),
+      );
+
+    const elapsedDays =
+      Math.max(
+        0,
+        Math.ceil(
+          (
+            now.getTime() -
+            startTime
+          ) /
+          (
+            24 *
+            60 *
+            60 *
+            1000
+          ),
+        ),
+      );
+
+    const daysElapsed =
+      Math.min(
+        elapsedDays,
+        totalDays,
+      );
+
+    const daysRemaining =
+      Math.max(
+        0,
+        totalDays -
+        daysElapsed,
+      );
+
+    const expectedProgressPercent =
+      totalDays > 0
+        ? Math.round(
+            (
+              daysElapsed /
+              totalDays
+            ) *
+            1000,
+          ) / 10
+        : 0;
+
+    const difference =
+      progress.progressPercent -
+      expectedProgressPercent;
+
+    let pace:
+      | 'AHEAD'
+      | 'ON_TRACK'
+      | 'BEHIND';
+
+    if (difference >= 10) {
+      pace = 'AHEAD';
+    } else if (
+      difference <= -10
+    ) {
+      pace = 'BEHIND';
+    } else {
+      pace = 'ON_TRACK';
+    }
+
+    return {
+      status:
+        'AVAILABLE',
+      goalType:
+        goal.goalType,
+      currentWeightKg:
+        progress.currentWeightKg,
+      targetWeightKg:
+        goal.targetWeightKg,
+      progressPercent:
+        progress.progressPercent,
+      daysElapsed,
+      daysRemaining,
+      expectedProgressPercent,
+      pace,
+    };
+  }
 }

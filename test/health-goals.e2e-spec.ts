@@ -646,6 +646,87 @@ describe('Health Goals (e2e)', () => {
     ).toBe('AT_TARGET');
   });
 
+  it('returns goal summary snapshot', async () => {
+    const userId =
+      'e2e-health-goal-summary-user';
+
+    await request(app.getHttpServer())
+      .post('/health-goals')
+      .send({
+        userId,
+        goalType:
+          'WEIGHT_LOSS',
+        startWeightKg:
+          75,
+        targetWeightKg:
+          68,
+        startDate:
+          '2026-09-01T00:00:00.000Z',
+        targetDate:
+          '2026-12-31T00:00:00.000Z',
+      })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post('/body-metrics/weight')
+      .send({
+        userId,
+        weightKg:
+          72.5,
+        measuredAt:
+          '2026-09-08T08:00:00.000Z',
+      })
+      .expect(201);
+
+    const response =
+      await request(app.getHttpServer())
+        .get(
+          `/health-goals/${userId}/summary`,
+        )
+        .expect(200);
+
+    expect(
+      response.body.data.status,
+    ).toBe('AVAILABLE');
+
+    expect(
+      response.body.data.goalType,
+    ).toBe('WEIGHT_LOSS');
+
+    expect(
+      response.body.data.currentWeightKg,
+    ).toBe(72.5);
+
+    expect(
+      response.body.data.targetWeightKg,
+    ).toBe(68);
+
+    expect(
+      response.body.data.progressPercent,
+    ).toBe(35.7);
+
+    expect(
+      response.body.data.daysElapsed,
+    ).toBeGreaterThanOrEqual(0);
+
+    expect(
+      response.body.data.daysRemaining,
+    ).toBeGreaterThanOrEqual(0);
+
+    expect(
+      response.body.data.expectedProgressPercent,
+    ).toBeGreaterThanOrEqual(0);
+
+    expect([
+      'AHEAD',
+      'ON_TRACK',
+      'BEHIND',
+    ]).toContain(
+      response.body.data.pace,
+    );
+  });
+
+
   it('ignores body weight recorded before goal start', async () => {
     const userId =
       'e2e-health-goal-pre-start-weight-user';
