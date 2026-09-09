@@ -136,7 +136,7 @@ describe('Health Goals (e2e)', () => {
 
     expect(
       response.body.data.trend,
-    ).toBe('ON_TRACK');
+    ).toBe('PROGRESSING');
 
     const noGoalResponse =
       await request(app.getHttpServer())
@@ -452,6 +452,240 @@ describe('Health Goals (e2e)', () => {
         '/health-goals/not-a-number/complete',
       )
       .expect(400);
+  });
+
+
+  it('calculates muscle gain goal progress', async () => {
+    const userId =
+      'e2e-health-goal-muscle-gain-user';
+
+    await request(app.getHttpServer())
+      .post('/health-goals')
+      .send({
+        userId,
+        goalType:
+          'MUSCLE_GAIN',
+        startWeightKg:
+          70,
+        targetWeightKg:
+          75,
+        startDate:
+          '2026-09-01T00:00:00.000Z',
+      })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post('/body-metrics/weight')
+      .send({
+        userId,
+        weightKg:
+          72,
+        measuredAt:
+          '2026-09-08T08:00:00.000Z',
+      })
+      .expect(201);
+
+    const response =
+      await request(app.getHttpServer())
+        .get(
+          `/health-goals/${userId}/progress`,
+        )
+        .expect(200);
+
+    expect(
+      response.body.data.status,
+    ).toBe('AVAILABLE');
+
+    expect(
+      response.body.data.currentWeightKg,
+    ).toBe(72);
+
+    expect(
+      response.body.data.remainingKg,
+    ).toBe(3);
+
+    expect(
+      response.body.data.progressPercent,
+    ).toBe(40);
+
+    expect(
+      response.body.data.trend,
+    ).toBe('PROGRESSING');
+  });
+
+  it('evaluates maintain goal range', async () => {
+    const userId =
+      'e2e-health-goal-maintain-user';
+
+    await request(app.getHttpServer())
+      .post('/health-goals')
+      .send({
+        userId,
+        goalType:
+          'MAINTAIN',
+        startWeightKg:
+          70,
+        targetWeightKg:
+          70,
+        startDate:
+          '2026-09-01T00:00:00.000Z',
+      })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post('/body-metrics/weight')
+      .send({
+        userId,
+        weightKg:
+          70.6,
+        measuredAt:
+          '2026-09-08T08:00:00.000Z',
+      })
+      .expect(201);
+
+    const withinResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/health-goals/${userId}/progress`,
+        )
+        .expect(200);
+
+    expect(
+      withinResponse.body.data.maintenanceStatus,
+    ).toBe('WITHIN_RANGE');
+
+    expect(
+      withinResponse.body.data.deviationKg,
+    ).toBe(0.6);
+
+    expect(
+      withinResponse.body.data.maintenanceRangeKg,
+    ).toEqual({
+      min: 69,
+      max: 71,
+    });
+
+    expect(
+      withinResponse.body.data.progressPercent,
+    ).toBeUndefined();
+
+    await request(app.getHttpServer())
+      .post('/body-metrics/weight')
+      .send({
+        userId,
+        weightKg:
+          72,
+        measuredAt:
+          '2026-09-09T08:00:00.000Z',
+      })
+      .expect(201);
+
+    const outsideResponse =
+      await request(app.getHttpServer())
+        .get(
+          `/health-goals/${userId}/progress`,
+        )
+        .expect(200);
+
+    expect(
+      outsideResponse.body.data.maintenanceStatus,
+    ).toBe('OUTSIDE_RANGE');
+
+    expect(
+      outsideResponse.body.data.deviationKg,
+    ).toBe(2);
+  });
+
+  it('caps goal progress at one hundred percent', async () => {
+    const userId =
+      'e2e-health-goal-cap-user';
+
+    await request(app.getHttpServer())
+      .post('/health-goals')
+      .send({
+        userId,
+        goalType:
+          'WEIGHT_LOSS',
+        startWeightKg:
+          75,
+        targetWeightKg:
+          68,
+        startDate:
+          '2026-09-01T00:00:00.000Z',
+      })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post('/body-metrics/weight')
+      .send({
+        userId,
+        weightKg:
+          66,
+        measuredAt:
+          '2026-09-08T08:00:00.000Z',
+      })
+      .expect(201);
+
+    const response =
+      await request(app.getHttpServer())
+        .get(
+          `/health-goals/${userId}/progress`,
+        )
+        .expect(200);
+
+    expect(
+      response.body.data.progressPercent,
+    ).toBe(100);
+
+    expect(
+      response.body.data.remainingKg,
+    ).toBe(0);
+
+    expect(
+      response.body.data.trend,
+    ).toBe('AT_TARGET');
+  });
+
+  it('ignores body weight recorded before goal start', async () => {
+    const userId =
+      'e2e-health-goal-pre-start-weight-user';
+
+    await request(app.getHttpServer())
+      .post('/health-goals')
+      .send({
+        userId,
+        goalType:
+          'WEIGHT_LOSS',
+        startWeightKg:
+          75,
+        targetWeightKg:
+          68,
+        startDate:
+          '2026-09-10T00:00:00.000Z',
+      })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post('/body-metrics/weight')
+      .send({
+        userId,
+        weightKg:
+          72,
+        measuredAt:
+          '2026-09-08T08:00:00.000Z',
+      })
+      .expect(201);
+
+    const response =
+      await request(app.getHttpServer())
+        .get(
+          `/health-goals/${userId}/progress`,
+        )
+        .expect(200);
+
+    expect(
+      response.body.data.status,
+    ).toBe('INSUFFICIENT_DATA');
   });
 
 });

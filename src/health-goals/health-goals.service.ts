@@ -267,14 +267,76 @@ export class HealthGoalsService {
       await this.prisma.bodyMetricRecord.findFirst({
         where: {
           userId,
+          measuredAt: {
+            gte: goal.startDate,
+          },
         },
         orderBy: {
           measuredAt: 'desc',
         },
       });
 
+    if (!latestWeight) {
+      return {
+        status: 'INSUFFICIENT_DATA',
+        goal,
+      };
+    }
+
+    const currentWeightKg =
+      latestWeight.weightKg;
+
+    if (goal.goalType === 'MAINTAIN') {
+      const referenceWeightKg =
+        goal.targetWeightKg ??
+        goal.startWeightKg;
+
+      if (referenceWeightKg === null) {
+        return {
+          status: 'INSUFFICIENT_DATA',
+          goal,
+        };
+      }
+
+      const toleranceKg = 1;
+
+      const deviationKg =
+        Math.round(
+          Math.abs(
+            currentWeightKg -
+              referenceWeightKg,
+          ) * 10,
+        ) / 10;
+
+      return {
+        status: 'AVAILABLE',
+        goal,
+        currentWeightKg,
+        maintenanceStatus:
+          deviationKg <= toleranceKg
+            ? 'WITHIN_RANGE'
+            : 'OUTSIDE_RANGE',
+        deviationKg,
+        maintenanceRangeKg: {
+          min:
+            Math.round(
+              (
+                referenceWeightKg -
+                toleranceKg
+              ) * 10,
+            ) / 10,
+          max:
+            Math.round(
+              (
+                referenceWeightKg +
+                toleranceKg
+              ) * 10,
+            ) / 10,
+        },
+      };
+    }
+
     if (
-      !latestWeight ||
       goal.startWeightKg === null ||
       goal.targetWeightKg === null
     ) {
@@ -284,40 +346,87 @@ export class HealthGoalsService {
       };
     }
 
+    const isWeightLoss =
+      goal.goalType === 'WEIGHT_LOSS';
+
     const totalChange =
-      goal.startWeightKg -
-      goal.targetWeightKg;
+      isWeightLoss
+        ? goal.startWeightKg -
+          goal.targetWeightKg
+        : goal.targetWeightKg -
+          goal.startWeightKg;
+
+    if (totalChange <= 0) {
+      return {
+        status: 'INSUFFICIENT_DATA',
+        goal,
+      };
+    }
 
     const completedChange =
-      goal.startWeightKg -
-      latestWeight.weightKg;
+      isWeightLoss
+        ? goal.startWeightKg -
+          currentWeightKg
+        : currentWeightKg -
+          goal.startWeightKg;
+
+    const rawProgressPercent =
+      (
+        completedChange /
+        totalChange
+      ) * 100;
 
     const progressPercent =
-      totalChange > 0
-        ? Math.round(
-            (completedChange /
-              totalChange) *
-              1000,
-          ) / 10
-        : 0;
+      Math.round(
+        Math.min(
+          100,
+          Math.max(
+            0,
+            rawProgressPercent,
+          ),
+        ) * 10,
+      ) / 10;
+
+    const targetReached =
+      isWeightLoss
+        ? currentWeightKg <=
+          goal.targetWeightKg
+        : currentWeightKg >=
+          goal.targetWeightKg;
+
+    const remainingKg =
+      targetReached
+        ? 0
+        : Math.round(
+            Math.abs(
+              goal.targetWeightKg -
+                currentWeightKg,
+            ) * 10,
+          ) / 10;
+
+    let trend:
+      | 'AT_TARGET'
+      | 'PROGRESSING'
+      | 'NO_CHANGE'
+      | 'REGRESSING';
+
+    if (targetReached) {
+      trend = 'AT_TARGET';
+    } else if (completedChange > 0) {
+      trend = 'PROGRESSING';
+    } else if (completedChange === 0) {
+      trend = 'NO_CHANGE';
+    } else {
+      trend = 'REGRESSING';
+    }
 
     return {
       status: 'AVAILABLE',
       goal,
-      currentWeightKg:
-        latestWeight.weightKg,
-      remainingKg:
-        Math.round(
-          (
-            latestWeight.weightKg -
-            goal.targetWeightKg
-          ) * 10,
-        ) / 10,
+      currentWeightKg,
+      remainingKg,
       progressPercent,
-      trend:
-        progressPercent >= 0
-          ? 'ON_TRACK'
-          : 'OFF_TRACK',
+      trend,
     };
   }
 }
