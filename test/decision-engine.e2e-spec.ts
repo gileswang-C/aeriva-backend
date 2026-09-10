@@ -132,4 +132,64 @@ describe('Decision Engine (e2e)', () => {
       response.body.data.decision.type,
     ).toBe('ADJUST_NUTRITION');
   });
+
+
+  it('returns modify training decision when user reports pain', async () => {
+    const userId =
+      'e2e-decision-pain-user';
+
+
+    await request(app.getHttpServer())
+      .post('/health-goals')
+      .send({
+        userId,
+
+        goalType:
+          'WEIGHT_LOSS',
+
+        startWeightKg:
+          80,
+
+        targetWeightKg:
+          70,
+
+        startDate:
+          '2026-09-01T00:00:00.000Z',
+
+        targetDate:
+          '2026-12-31T00:00:00.000Z',
+      })
+      .expect(201);
+
+
+    await request(app.getHttpServer())
+      .put(
+        `/body-state/${userId}/today`,
+      )
+      .send({
+        painAreas: [
+          '腰',
+        ],
+
+        energyLevel:
+          3,
+
+        sleepHours:
+          7,
+      })
+      .expect(200);
+
+
+    const response =
+      await request(app.getHttpServer())
+        .get(
+          `/decision/${userId}`,
+        )
+        .expect(200);
+
+
+    expect(
+      response.body.data.decision.type,
+    ).toBe('MODIFY_TRAINING');
+  });
 });

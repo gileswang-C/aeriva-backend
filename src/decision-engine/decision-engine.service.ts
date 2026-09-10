@@ -1,23 +1,90 @@
 import { Injectable } from '@nestjs/common';
-import { HealthGoalsService } from '../health-goals/health-goals.service';
+
+import {
+  DecisionRule,
+} from './rules/decision-rule.interface';
+
+import {
+  PainRiskRule,
+} from './rules/pain-risk.rule';
+
+import {
+  RecoveryRule,
+} from './rules/recovery.rule';
+
+import {
+  NutritionRule,
+} from './rules/nutrition.rule';
+
+import {
+  GoalProgressRule,
+} from './rules/goal-progress.rule';
+
+import { DecisionContextBuilder } from './context/decision-context.builder';
+
 
 @Injectable()
 export class DecisionEngineService {
+
+  private readonly rules:
+    DecisionRule[] = [
+      new PainRiskRule(),
+      new RecoveryRule(),
+      new NutritionRule(),
+      new GoalProgressRule(),
+    ];
+
+
   constructor(
-    private readonly healthGoalsService: HealthGoalsService,
+    private readonly contextBuilder: DecisionContextBuilder,
   ) {}
+
 
   async decide(
     userId: string,
   ) {
-    const recommendation =
-      await this.healthGoalsService.getRecommendation(
+
+    const context =
+      await this.contextBuilder.build(
         userId,
       );
 
+
+    const decisions =
+      this.rules
+        .map(
+          rule =>
+            rule.evaluate(
+              context,
+            ),
+        )
+        .filter(
+          Boolean,
+        )
+        .sort(
+          (a, b) =>
+            (b?.priority ?? 0) -
+            (a?.priority ?? 0),
+        );
+
+
     if (
-      recommendation.status ===
-      'NO_GOAL'
+      decisions.length > 0
+    ) {
+      return {
+        decision: {
+          type:
+            decisions[0]!.type,
+        },
+
+        reason:
+          decisions[0]!.reason,
+      };
+    }
+
+
+    if (
+      !context.healthGoal
     ) {
       return {
         decision: {
@@ -30,45 +97,15 @@ export class DecisionEngineService {
       };
     }
 
-    if (
-      recommendation.status !==
-      'AVAILABLE'
-    ) {
-      return {
-        decision: {
-          type:
-            'INSUFFICIENT_DATA',
-        },
-
-        reason:
-          'Insufficient health data',
-      };
-    }
-
-    if (
-      'level' in recommendation &&
-      recommendation.level ===
-      'NEEDS_ADJUSTMENT'
-    ) {
-      return {
-        decision: {
-          type:
-            'ADJUST_NUTRITION',
-        },
-
-        reason:
-          'Goal progress needs adjustment',
-      };
-    }
 
     return {
       decision: {
         type:
-          'CONTINUE',
+          'INSUFFICIENT_DATA',
       },
 
       reason:
-        'Current progress is acceptable',
+        'Insufficient health data',
     };
   }
 }
